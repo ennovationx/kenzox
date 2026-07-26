@@ -100,12 +100,13 @@ Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
 
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.`;
 
-    const providerOptions: Record<string, Record<string, unknown>> = {
-      lovable: { response_format: { type: "json_object" } },
+    const lovableOpts: Record<string, unknown> = {
+      response_format: { type: "json_object" },
     };
     if (modelId.startsWith("openai/gpt-5.6")) {
-      providerOptions.lovable.reasoningEffort = "none";
+      lovableOpts.reasoningEffort = "none";
     }
+    const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof generateText>[0]["providerOptions"];
 
     try {
       const { text } = await generateText({
