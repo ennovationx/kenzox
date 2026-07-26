@@ -15,6 +15,7 @@ Rules:
 - No external network/CDN dependencies except Google Fonts if useful.
 - Vanilla JS only unless the user asks otherwise. No build step.
 - Fully functional; no TODOs. Add interactivity when relevant.
+- Keep total output reasonably concise; avoid unnecessary boilerplate.
 `;
 
 const Input = z.object({
@@ -35,13 +36,16 @@ const Input = z.object({
 const ALLOWED_MODELS = new Set([
   "google/gemini-3.6-flash",
   "google/gemini-3.5-flash",
+  "google/gemini-3.1-flash-lite",
   "openai/gpt-5.4",
   "openai/gpt-5.4-mini",
   "openai/gpt-5-mini",
 ]);
 
+const DEFAULT_MODEL = "google/gemini-3.6-flash";
+
 function extractJson(text: string): { html: string; css: string; js: string; summary: string } {
-  let t = text.trim();
+  let t = (text ?? "").trim();
   if (t.startsWith("```")) t = t.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   const first = t.indexOf("{");
   const last = t.lastIndexOf("}");
@@ -62,7 +66,7 @@ export const generateCode = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
 
-    const modelId = data.model && ALLOWED_MODELS.has(data.model) ? data.model : "openai/gpt-5.4";
+    const modelId = data.model && ALLOWED_MODELS.has(data.model) ? data.model : DEFAULT_MODEL;
     const gateway = createLovableAiGatewayProvider(key);
     const model = gateway(modelId);
 
@@ -73,7 +77,7 @@ export const generateCode = createServerFn({ method: "POST" })
     const hasCurrent = cf["index.html"] || cf["styles.css"] || cf["script.js"];
 
     const userMsg = hasCurrent
-      ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required.
+      ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required. Respond with JSON only.
 
 Current index.html:
 \`\`\`html
@@ -89,10 +93,20 @@ ${cf["script.js"] ?? ""}
 \`\`\`
 
 User request:
-${data.prompt}`
-      : `Build a fresh app for this request:\n\n${data.prompt}`;
+${data.prompt}
+
+Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
+      : `Build a fresh app for this request. Return JSON only: {"html":"...","css":"...","js":"...","summary":"..."}\n\n${data.prompt}`;
 
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.`;
+
+    const lovableOpts: Record<string, unknown> = {
+      response_format: { type: "json_object" },
+    };
+    if (modelId.startsWith("openai/gpt-5.6")) {
+      lovableOpts.reasoningEffort = "none";
+    }
+    const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof generateText>[0]["providerOptions"];
 
     try {
       const { text } = await generateText({
@@ -101,13 +115,18 @@ ${data.prompt}`
           { role: "system", content: sys },
           { role: "user", content: userMsg },
         ],
-        providerOptions: modelId.startsWith("openai/gpt-5.6")
-          ? { lovable: { reasoningEffort: "none" } }
-          : undefined,
+        providerOptions,
       });
-      return extractJson(text);
+      if (!text || !text.trim()) throw new Error("Empty response from AI");
+      try {
+        return extractJson(text);
+      } catch (parseErr) {
+        console.error("[generateCode] JSON parse failed:", parseErr, "raw:", text.slice(0, 500));
+        throw new Error("AI returned malformed JSON. Try again or switch models in Settings.");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      console.error("[generateCode] failure:", msg);
       if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
       if (msg.includes("402"))
         throw new Error("AI credits exhausted for this workspace. Add credits to continue.");
