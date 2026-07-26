@@ -8,7 +8,7 @@ export const Route = createFileRoute("/")({
       { title: "Kenzo — Build web apps by chatting with AI" },
       { name: "description", content: "Kenzo turns natural-language prompts into complete, running web apps. Chat, edit code, preview live — instantly." },
       { property: "og:title", content: "Kenzo — Build web apps by chatting with AI" },
-      { property: "og:description", content: "Chat with AI, edit generated code, preview live in seconds." },
+      { property: "og:description", content: "Kenzo turns natural-language prompts into complete, running web apps. Chat, edit code, preview live — instantly." },
     ],
   }),
   component: Landing,
