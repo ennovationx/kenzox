@@ -56,6 +56,8 @@ function Workspace() {
   const [busy, setBusy] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const generate = useServerFn(generateCode);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
