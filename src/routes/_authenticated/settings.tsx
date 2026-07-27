@@ -19,11 +19,10 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 const MODELS = [
-  { id: "openai/gpt-5.4", label: "GPT-5.4 — Recommended" },
-  { id: "openai/gpt-5.4-mini", label: "GPT-5.4 mini — Faster" },
-  { id: "openai/gpt-5-mini", label: "GPT-5 mini — Balanced" },
-  { id: "google/gemini-3.6-flash", label: "Gemini 3.6 Flash — Fast" },
-  { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite — Free & Fast" },
+  { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash — Balanced" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro — Best quality" },
+  { id: "google/gemini-3.6-flash", label: "Gemini 3.6 Flash — Latest" },
 ];
 
 function SettingsPage() {
