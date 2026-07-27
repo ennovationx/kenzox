@@ -34,15 +34,13 @@ const Input = z.object({
 });
 
 const ALLOWED_MODELS = new Set([
+  "google/gemini-2.5-flash-lite",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-pro",
   "google/gemini-3.6-flash",
-  "google/gemini-3.5-flash",
-  "google/gemini-3.1-flash-lite",
-  "openai/gpt-5.4",
-  "openai/gpt-5.4-mini",
-  "openai/gpt-5-mini",
 ]);
 
-const DEFAULT_MODEL = "google/gemini-3.6-flash";
+const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
 
 function extractJson(text: string): { html: string; css: string; js: string; summary: string } {
   let t = (text ?? "").trim();
