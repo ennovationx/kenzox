@@ -111,12 +111,11 @@ Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
     try {
       const { text } = await generateText({
         model,
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: userMsg },
-        ],
+        system: sys,
+        prompt: userMsg,
         providerOptions,
       });
+
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
         return extractJson(text);
