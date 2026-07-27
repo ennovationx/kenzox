@@ -56,6 +56,8 @@ function Workspace() {
   const [busy, setBusy] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const generate = useServerFn(generateCode);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -223,22 +225,37 @@ function Workspace() {
   return (
     <div className="h-screen w-screen flex overflow-hidden">
       {/* Sidebar */}
-      <aside className={`fixed lg:static z-30 top-0 h-full w-72 glass-strong border-r border-glass-border transition-transform ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 flex flex-col`}>
-        <div className="p-4 flex items-center justify-between">
-          <Link to="/"><Logo /></Link>
+      <aside
+        className={`fixed lg:static z-30 top-0 h-full glass-strong border-r border-glass-border transition-all duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 flex flex-col ${sidebarCollapsed ? "w-16" : "w-72"}`}
+      >
+        <div className="p-4 flex items-center justify-between gap-2">
+          <button
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            className="hidden lg:inline-flex items-center gap-2 hover:opacity-80 transition"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <Logo showWordmark={!sidebarCollapsed} />
+          </button>
+          <Link to="/" className="lg:hidden"><Logo /></Link>
           <button className="lg:hidden p-2" onClick={() => setSidebarOpen(false)}><X className="h-4 w-4" /></button>
         </div>
-        <button onClick={newProject} className="mx-4 mb-3 inline-flex items-center justify-center gap-2 rounded-lg gradient-brand px-3 py-2 text-sm font-medium text-primary-foreground shadow-lift hover:opacity-90 transition">
-          <Plus className="h-4 w-4" /> New project
+        <button
+          onClick={newProject}
+          title="New project"
+          className={`mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-lg gradient-brand py-2 text-sm font-medium text-primary-foreground shadow-lift hover:opacity-90 transition ${sidebarCollapsed ? "px-0" : "px-3"}`}
+        >
+          <Plus className="h-4 w-4" /> {!sidebarCollapsed && <span>New project</span>}
         </button>
-        <div className="px-4 pb-2 text-xs uppercase tracking-wider text-muted-foreground">Projects</div>
+        {!sidebarCollapsed && (
+          <div className="px-4 pb-2 text-xs uppercase tracking-wider text-muted-foreground">Projects</div>
+        )}
         <div className="flex-1 overflow-auto px-2">
-          {projects.length === 0 && (
+          {!sidebarCollapsed && projects.length === 0 && (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">
               No projects yet. Create your first one!
             </div>
           )}
-          {projects.map((p) => (
+          {!sidebarCollapsed && projects.map((p) => (
             <div key={p.id} className={`group flex items-center gap-1 rounded-lg mb-1 ${activeId === p.id ? "bg-primary/10" : "hover:bg-surface"}`}>
               <button onClick={() => selectProject(p)} className="flex-1 text-left px-3 py-2 text-sm truncate">
                 {p.name}
@@ -250,16 +267,19 @@ function Workspace() {
           ))}
         </div>
         <div className="p-3 border-t border-glass-border space-y-1">
-          <div className="px-2 py-2 text-xs text-muted-foreground truncate">
-            {profile?.display_name || user?.email}
-          </div>
-          <Link to="/settings" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface transition">
-            <Settings className="h-4 w-4" /> Settings
+          {!sidebarCollapsed && (
+            <div className="px-2 py-2 text-xs text-muted-foreground truncate">
+              {profile?.display_name || user?.email}
+            </div>
+          )}
+          <Link to="/settings" title="Settings" className={`flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "justify-center px-0" : "px-3"}`}>
+            <Settings className="h-4 w-4" /> {!sidebarCollapsed && <span>Settings</span>}
           </Link>
-          <button onClick={signOut} className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface transition">
-            <LogOut className="h-4 w-4" /> Log out
+          <button onClick={signOut} title="Log out" className={`w-full flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "justify-center px-0" : "px-3"}`}>
+            <LogOut className="h-4 w-4" /> {!sidebarCollapsed && <span>Log out</span>}
           </button>
         </div>
+
       </aside>
 
       {/* Main */}
