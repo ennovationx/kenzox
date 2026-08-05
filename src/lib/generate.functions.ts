@@ -166,33 +166,30 @@ export const generateCode = createServerFn({ method: "POST" })
     const cf = data.currentFiles ?? {};
     const hasCurrent = cf["index.html"] || cf["styles.css"] || cf["script.js"];
 
+    const CONTRACT = `Respond using the marker format only:
+<<<FILE:index.html>>> … <<<FILE:styles.css>>> … <<<FILE:script.js>>> … <<<SUMMARY>>> … <<<END>>>`;
+
     const userMsg = hasCurrent
-      ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required. Respond with JSON only.
+      ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required. Always return ALL THREE files in full.
 
 Current index.html:
-\`\`\`html
 ${cf["index.html"] ?? ""}
-\`\`\`
+
 Current styles.css:
-\`\`\`css
 ${cf["styles.css"] ?? ""}
-\`\`\`
+
 Current script.js:
-\`\`\`js
 ${cf["script.js"] ?? ""}
-\`\`\`
 
 User request:
 ${data.prompt}
 
-Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
-      : `Build a fresh app for this request. Return JSON only: {"html":"...","css":"...","js":"...","summary":"..."}\n\n${data.prompt}`;
+${CONTRACT}`
+      : `Build a fresh, complete app for this request.\n\n${data.prompt}\n\n${CONTRACT}`;
 
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.`;
 
-    const lovableOpts: Record<string, unknown> = {
-      response_format: { type: "json_object" },
-    };
+    const lovableOpts: Record<string, unknown> = {};
     if (modelId.startsWith("openai/gpt-5.6")) {
       lovableOpts.reasoningEffort = "none";
     }
@@ -212,10 +209,17 @@ Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
-        return extractJson(text);
+        const parsed = parseResult(text);
+        // Keep unchanged files instead of blanking them out.
+        return {
+          html: parsed.html || cf["index.html"] || "",
+          css: parsed.css || cf["styles.css"] || "",
+          js: parsed.js || cf["script.js"] || "",
+          summary: parsed.summary,
+        };
       } catch (parseErr) {
-        console.error("[generateCode] JSON parse failed:", parseErr, "raw:", text.slice(0, 500));
-        throw new Error("AI returned malformed JSON. Try again or switch models in Settings.");
+        console.error("[generateCode] parse failed:", parseErr, "raw:", text.slice(0, 800));
+        throw new Error("The AI response could not be read. Please try again.");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
