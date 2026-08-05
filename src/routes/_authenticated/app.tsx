@@ -366,9 +366,15 @@ function Workspace() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col lg:flex-row min-w-0">
+      <main ref={splitRef} className="flex-1 flex flex-col lg:flex-row min-w-0">
         {/* Chat */}
-        <section className="flex flex-col w-full lg:w-[26rem] lg:min-w-[22rem] border-r border-glass-border">
+        <section
+          className="flex flex-col w-full border-r border-glass-border lg:shrink-0"
+          style={{ width: undefined }}
+          data-chat-panel
+        >
+          <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>
+
           <div className="h-14 flex items-center justify-between px-4 border-b border-glass-border glass">
             <button className="lg:hidden p-2" onClick={() => setSidebarOpen(true)}><Menu className="h-4 w-4" /></button>
             <div className="flex-1 flex items-center gap-2">
