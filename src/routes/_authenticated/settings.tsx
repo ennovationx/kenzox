@@ -35,7 +35,7 @@ function SettingsPage() {
   const [personality, setPersonality] = useState("balanced");
   const [verbosity, setVerbosity] = useState("normal");
   const [style, setStyle] = useState("modern");
-  const [model, setModel] = useState("google/gemini-3.6-flash");
+  const [model, setModel] = useState("google/gemini-2.5-flash-lite");
   const [password, setPassword] = useState("");
   const [theme, setThemeState] = useState<Theme>(getStoredTheme());
   const [saving, setSaving] = useState(false);
@@ -102,7 +102,7 @@ function SettingsPage() {
     setPersonality("balanced");
     setVerbosity("normal");
     setStyle("modern");
-    setModel("openai/gpt-5.4");
+    setModel("google/gemini-2.5-flash-lite");
   }
 
   return (
