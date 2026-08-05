@@ -60,7 +60,9 @@ function Workspace() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [zipping, setZipping] = useState(false);
+  const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
 
+  const gutterRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const generate = useServerFn(generateCode);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
