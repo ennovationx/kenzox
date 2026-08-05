@@ -8,6 +8,7 @@ import { generateCode } from "@/lib/generate.functions";
 import {
   Plus, Send, RefreshCw, Download, ExternalLink, Trash2, Settings, LogOut,
   FileCode, Palette, FileText, Loader2, Menu, X, Sparkles,
+  Monitor, Tablet, Smartphone, ChevronDown, FileArchive, Copy,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
