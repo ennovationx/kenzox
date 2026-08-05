@@ -125,12 +125,16 @@ Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
     const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof generateText>[0]["providerOptions"];
 
     try {
-      const { text } = await generateText({
+      // Streamed on the wire (consumed server-side) so long generations keep
+      // bytes flowing and never trip the platform's idle-request timeout.
+      const result = streamText({
         model,
         system: sys,
         prompt: userMsg,
+        maxOutputTokens: 32000,
         providerOptions,
       });
+      const text = await result.text;
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
