@@ -125,8 +125,10 @@ function Workspace() {
     await supabase.from("projects").update({ name }).eq("id", id);
   }
 
-  async function deleteProject(id: string) {
-    if (!confirm("Delete this project? This cannot be undone.")) return;
+  async function confirmDelete() {
+    const id = deleteTarget?.id;
+    if (!id) return;
+    setDeleteTarget(null);
     await supabase.from("projects").delete().eq("id", id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
     if (activeId === id) {
