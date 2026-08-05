@@ -122,7 +122,7 @@ Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
     if (modelId.startsWith("openai/gpt-5.6")) {
       lovableOpts.reasoningEffort = "none";
     }
-    const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof generateText>[0]["providerOptions"];
+    const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof streamText>[0]["providerOptions"];
 
     try {
       // Streamed on the wire (consumed server-side) so long generations keep
