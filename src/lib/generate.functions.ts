@@ -51,13 +51,14 @@ const Input = z.object({
 });
 
 const ALLOWED_MODELS = new Set([
-  "google/gemini-2.5-flash-lite",
-  "google/gemini-2.5-flash",
-  "google/gemini-2.5-pro",
   "google/gemini-3.6-flash",
+  "google/gemini-3.5-flash",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite",
+  "google/gemini-2.5-pro",
 ]);
 
-const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
+const DEFAULT_MODEL = "google/gemini-3.6-flash";
 
 function extractJson(text: string): { html: string; css: string; js: string; summary: string } {
   let t = (text ?? "").trim();
