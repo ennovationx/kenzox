@@ -57,6 +57,8 @@ function Workspace() {
   const [previewNonce, setPreviewNonce] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [zipping, setZipping] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const generate = useServerFn(generateCode);
