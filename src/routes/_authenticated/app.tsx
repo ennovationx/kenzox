@@ -202,17 +202,57 @@ function Workspace() {
     }
   }
 
-  function exportZip() {
-    // Minimal ZIP alternative: bundle as a single downloadable HTML with inlined assets.
-    const merged = buildSrcDoc(files);
-    const blob = new Blob([merged], { type: "text/html" });
+  function projectSlug() {
+    return (projects.find((p) => p.id === activeId)?.name || "kenzo-app")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "kenzo-app";
+  }
+
+  function triggerDownload(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${(projects.find((p) => p.id === activeId)?.name || "kenzo-app").replace(/[^a-z0-9-_]+/gi, "-")}.html`;
+    a.download = filename;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Downloaded single-file HTML export");
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function downloadZip() {
+    try {
+      setZipping(true);
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      zip.file("index.html", files["index.html"]);
+      zip.file("styles.css", files["styles.css"]);
+      zip.file("script.js", files["script.js"]);
+      zip.file(
+        "README.md",
+        `# ${projects.find((p) => p.id === activeId)?.name || "Kenzo app"}\n\nGenerated with Kenzo.\n\n## Run locally\n\nOpen \`index.html\` in your browser, or serve the folder:\n\n\`\`\`bash\nnpx serve .\n\`\`\`\n\n## Files\n\n- \`index.html\` — markup\n- \`styles.css\` — styles\n- \`script.js\` — behaviour\n`,
+      );
+      const blob = await zip.generateAsync({ type: "blob" });
+      triggerDownload(blob, `${projectSlug()}.zip`);
+      toast.success("Downloaded project ZIP");
+    } catch {
+      toast.error("Could not build the ZIP file");
+    } finally {
+      setZipping(false);
+      setExportOpen(false);
+    }
+  }
+
+  function downloadSingleHtml() {
+    triggerDownload(new Blob([buildSrcDoc(files)], { type: "text/html" }), `${projectSlug()}.html`);
+    toast.success("Downloaded single-file HTML");
+    setExportOpen(false);
+  }
+
+  async function copyActiveFile() {
+    await navigator.clipboard.writeText(files[activeFile]);
+    toast.success(`${activeFile} copied`);
   }
 
   async function signOut() {
