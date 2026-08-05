@@ -61,11 +61,47 @@ function Workspace() {
   const [exportOpen, setExportOpen] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [chatWidth, setChatWidth] = useState(416);
+  const [dragging, setDragging] = useState(false);
 
+  const splitRef = useRef<HTMLElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const generate = useServerFn(generateCode);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem("kenzo:chatWidth"));
+    if (saved >= 280 && saved <= 900) setChatWidth(saved);
+  }, []);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      const left = splitRef.current?.getBoundingClientRect().left ?? 0;
+      const max = Math.min(900, (splitRef.current?.clientWidth ?? 1200) - 360);
+      const w = Math.max(300, Math.min(max, e.clientX - left));
+      setChatWidth(w);
+    };
+    const onUp = () => {
+      setDragging(false);
+      setChatWidth((w) => {
+        localStorage.setItem("kenzo:chatWidth", String(w));
+        return w;
+      });
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
 
   useEffect(() => {
     (async () => {
