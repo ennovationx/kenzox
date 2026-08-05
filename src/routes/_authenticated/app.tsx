@@ -61,11 +61,47 @@ function Workspace() {
   const [exportOpen, setExportOpen] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [chatWidth, setChatWidth] = useState(416);
+  const [dragging, setDragging] = useState(false);
 
+  const splitRef = useRef<HTMLElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const generate = useServerFn(generateCode);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem("kenzo:chatWidth"));
+    if (saved >= 280 && saved <= 900) setChatWidth(saved);
+  }, []);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      const left = splitRef.current?.getBoundingClientRect().left ?? 0;
+      const max = Math.min(900, (splitRef.current?.clientWidth ?? 1200) - 360);
+      const w = Math.max(300, Math.min(max, e.clientX - left));
+      setChatWidth(w);
+    };
+    const onUp = () => {
+      setDragging(false);
+      setChatWidth((w) => {
+        localStorage.setItem("kenzo:chatWidth", String(w));
+        return w;
+      });
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
 
   useEffect(() => {
     (async () => {
@@ -125,8 +161,10 @@ function Workspace() {
     await supabase.from("projects").update({ name }).eq("id", id);
   }
 
-  async function deleteProject(id: string) {
-    if (!confirm("Delete this project? This cannot be undone.")) return;
+  async function confirmDelete() {
+    const id = deleteTarget?.id;
+    if (!id) return;
+    setDeleteTarget(null);
     await supabase.from("projects").delete().eq("id", id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
     if (activeId === id) {
@@ -305,7 +343,7 @@ function Workspace() {
               <button onClick={() => selectProject(p)} className="flex-1 text-left px-3 py-2 text-sm truncate">
                 {p.name}
               </button>
-              <button onClick={() => deleteProject(p.id)} className="opacity-0 group-hover:opacity-100 p-2 text-muted-foreground hover:text-destructive transition">
+              <button onClick={() => setDeleteTarget({ id: p.id, name: p.name })} aria-label={`Delete ${p.name}`} className="opacity-0 group-hover:opacity-100 p-2 text-muted-foreground hover:text-destructive transition">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -328,9 +366,15 @@ function Workspace() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col lg:flex-row min-w-0">
+      <main ref={splitRef} className="flex-1 flex flex-col lg:flex-row min-w-0">
         {/* Chat */}
-        <section className="flex flex-col w-full lg:w-[26rem] lg:min-w-[22rem] border-r border-glass-border">
+        <section
+          className="flex flex-col w-full border-r border-glass-border lg:shrink-0"
+          style={{ width: undefined }}
+          data-chat-panel
+        >
+          <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>
+
           <div className="h-14 flex items-center justify-between px-4 border-b border-glass-border glass">
             <button className="lg:hidden p-2" onClick={() => setSidebarOpen(true)}><Menu className="h-4 w-4" /></button>
             <div className="flex-1 flex items-center gap-2">
@@ -400,7 +444,20 @@ function Workspace() {
           </form>
         </section>
 
+        {/* Drag handle */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat and preview panels"
+          onMouseDown={() => setDragging(true)}
+          onDoubleClick={() => { setChatWidth(416); localStorage.setItem("kenzo:chatWidth", "416"); }}
+          className={`hidden lg:flex w-1.5 shrink-0 cursor-col-resize items-center justify-center group ${dragging ? "bg-primary/40" : "hover:bg-primary/25"} transition-colors`}
+        >
+          <div className={`h-10 w-0.5 rounded-full ${dragging ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
+        </div>
+
         {/* Code + Preview */}
+
         <section className="flex-1 flex flex-col min-w-0">
           <div className="h-14 flex items-center justify-between px-4 border-b border-glass-border glass">
             <div className="flex gap-1 rounded-lg bg-input p-1">
@@ -544,6 +601,47 @@ function Workspace() {
           )}
         </section>
       </main>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-title"
+          onKeyDown={(e) => { if (e.key === "Escape") setDeleteTarget(null); }}
+        >
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-fade-in-up" onClick={() => setDeleteTarget(null)} />
+          <div className="relative w-full max-w-md rounded-2xl glass-strong border border-glass-border shadow-lift p-6 animate-fade-in-up">
+            <div className="flex items-start gap-4">
+              <div className="rounded-xl bg-destructive/10 p-3 text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="delete-title" className="text-lg font-semibold">Delete project</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  “{deleteTarget.name}” and its chat history will be permanently removed. This can’t be undone.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg glass px-4 py-2 text-sm font-medium hover:bg-surface transition"
+              >
+                Cancel
+              </button>
+              <button
+                autoFocus
+                onClick={confirmDelete}
+                className="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow-lift hover:opacity-90 transition"
+              >
+                Delete project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

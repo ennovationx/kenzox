@@ -19,10 +19,10 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 const MODELS = [
-  { id: "google/gemini-3.6-flash", label: "Gemini 3.6 Flash — Recommended (best code)" },
-  { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash — Rich, detailed builds" },
+  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite — Recommended (fastest)" },
   { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash — Balanced" },
-  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite — Fastest" },
+  { id: "google/gemini-3.6-flash", label: "Gemini 3.6 Flash — Best code quality" },
+  { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash — Rich, detailed builds" },
   { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro — Deepest reasoning" },
 ];
 
@@ -35,7 +35,7 @@ function SettingsPage() {
   const [personality, setPersonality] = useState("balanced");
   const [verbosity, setVerbosity] = useState("normal");
   const [style, setStyle] = useState("modern");
-  const [model, setModel] = useState("google/gemini-3.6-flash");
+  const [model, setModel] = useState("google/gemini-2.5-flash-lite");
   const [password, setPassword] = useState("");
   const [theme, setThemeState] = useState<Theme>(getStoredTheme());
   const [saving, setSaving] = useState(false);
@@ -102,7 +102,7 @@ function SettingsPage() {
     setPersonality("balanced");
     setVerbosity("normal");
     setStyle("modern");
-    setModel("openai/gpt-5.4");
+    setModel("google/gemini-2.5-flash-lite");
   }
 
   return (

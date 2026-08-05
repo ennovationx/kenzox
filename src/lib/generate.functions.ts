@@ -7,9 +7,20 @@ import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
 You author COMPLETE, production-quality, self-contained web apps as exactly three files: index.html, styles.css, script.js.
 
-OUTPUT CONTRACT
-- Respond with strict JSON ONLY: {"html":"...","css":"...","js":"...","summary":"..."}
-- No markdown fences, no commentary outside the JSON object.
+OUTPUT CONTRACT — follow EXACTLY, no JSON, no markdown fences:
+<<<FILE:index.html>>>
+...complete html...
+<<<FILE:styles.css>>>
+...complete css...
+<<<FILE:script.js>>>
+...complete js...
+<<<SUMMARY>>>
+One or two sentences describing what you built or changed.
+<<<END>>>
+
+- Emit the markers on their own lines, in that exact order, exactly once each.
+- Write raw file contents between markers — never escape them, never wrap them in backticks.
+- No commentary before the first marker or after <<<END>>>.
 - Every file must be complete and runnable. Never emit placeholders, "..." elisions, or TODOs.
 
 index.html
@@ -58,21 +69,84 @@ const ALLOWED_MODELS = new Set([
   "google/gemini-2.5-pro",
 ]);
 
-const DEFAULT_MODEL = "google/gemini-3.6-flash";
+const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
 
-function extractJson(text: string): { html: string; css: string; js: string; summary: string } {
-  let t = (text ?? "").trim();
-  if (t.startsWith("```")) t = t.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  const first = t.indexOf("{");
-  const last = t.lastIndexOf("}");
-  if (first !== -1 && last !== -1) t = t.slice(first, last + 1);
-  const parsed = JSON.parse(t);
-  return {
-    html: String(parsed.html ?? ""),
-    css: String(parsed.css ?? ""),
-    js: String(parsed.js ?? ""),
-    summary: String(parsed.summary ?? "Updated your app."),
+type Result = { html: string; css: string; js: string; summary: string };
+
+function stripFences(s: string) {
+  return s
+    .replace(/^\s*```[a-z]*\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
+    .trim();
+}
+
+/** Parse the marker protocol; fall back to JSON, then to fenced code blocks. */
+function parseResult(text: string): Result {
+  const t = (text ?? "").replace(/\r\n/g, "\n");
+
+  const grab = (name: string) => {
+    const re = new RegExp(
+      `<<<FILE:${name.replace(".", "\\.")}>>>\\n?([\\s\\S]*?)(?=\\n?<<<(?:FILE:|SUMMARY|END)|$)`,
+      "i",
+    );
+    const m = t.match(re);
+    return m ? stripFences(m[1]) : "";
   };
+
+  const html = grab("index.html");
+  const css = grab("styles.css");
+  const js = grab("script.js");
+  const sum = t.match(/<<<SUMMARY>>>\n?([\s\S]*?)(?=\n?<<<END|$)/i);
+
+  if (html || css || js) {
+    return {
+      html,
+      css,
+      js,
+      summary: (sum ? sum[1].trim() : "") || "Updated your app.",
+    };
+  }
+
+  // Fallback 1: strict JSON payload
+  try {
+    let j = t.trim();
+    if (j.startsWith("```")) j = stripFences(j);
+    const first = j.indexOf("{");
+    const last = j.lastIndexOf("}");
+    if (first !== -1 && last !== -1) j = j.slice(first, last + 1);
+    const parsed = JSON.parse(j);
+    if (parsed && (parsed.html || parsed.css || parsed.js)) {
+      return {
+        html: String(parsed.html ?? ""),
+        css: String(parsed.css ?? ""),
+        js: String(parsed.js ?? ""),
+        summary: String(parsed.summary ?? "Updated your app."),
+      };
+    }
+  } catch {
+    /* keep going */
+  }
+
+  // Fallback 2: fenced code blocks by language
+  const block = (langs: string[]) => {
+    for (const l of langs) {
+      const m = t.match(new RegExp("```" + l + "\\s*\\n([\\s\\S]*?)```", "i"));
+      if (m) return m[1].trim();
+    }
+    return "";
+  };
+  const fHtml = block(["html"]);
+  const fCss = block(["css"]);
+  const fJs = block(["js", "javascript"]);
+  if (fHtml || fCss || fJs) {
+    return { html: fHtml, css: fCss, js: fJs, summary: "Updated your app." };
+  }
+
+  // Fallback 3: a bare HTML document
+  const doc = t.match(/<!doctype html[\s\S]*<\/html>/i);
+  if (doc) return { html: doc[0], css: "", js: "", summary: "Updated your app." };
+
+  throw new Error("no-parse");
 }
 
 export const generateCode = createServerFn({ method: "POST" })
@@ -92,33 +166,30 @@ export const generateCode = createServerFn({ method: "POST" })
     const cf = data.currentFiles ?? {};
     const hasCurrent = cf["index.html"] || cf["styles.css"] || cf["script.js"];
 
+    const CONTRACT = `Respond using the marker format only:
+<<<FILE:index.html>>> … <<<FILE:styles.css>>> … <<<FILE:script.js>>> … <<<SUMMARY>>> … <<<END>>>`;
+
     const userMsg = hasCurrent
-      ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required. Respond with JSON only.
+      ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required. Always return ALL THREE files in full.
 
 Current index.html:
-\`\`\`html
 ${cf["index.html"] ?? ""}
-\`\`\`
+
 Current styles.css:
-\`\`\`css
 ${cf["styles.css"] ?? ""}
-\`\`\`
+
 Current script.js:
-\`\`\`js
 ${cf["script.js"] ?? ""}
-\`\`\`
 
 User request:
 ${data.prompt}
 
-Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
-      : `Build a fresh app for this request. Return JSON only: {"html":"...","css":"...","js":"...","summary":"..."}\n\n${data.prompt}`;
+${CONTRACT}`
+      : `Build a fresh, complete app for this request.\n\n${data.prompt}\n\n${CONTRACT}`;
 
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.`;
 
-    const lovableOpts: Record<string, unknown> = {
-      response_format: { type: "json_object" },
-    };
+    const lovableOpts: Record<string, unknown> = {};
     if (modelId.startsWith("openai/gpt-5.6")) {
       lovableOpts.reasoningEffort = "none";
     }
@@ -138,10 +209,17 @@ Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
-        return extractJson(text);
+        const parsed = parseResult(text);
+        // Keep unchanged files instead of blanking them out.
+        return {
+          html: parsed.html || cf["index.html"] || "",
+          css: parsed.css || cf["styles.css"] || "",
+          js: parsed.js || cf["script.js"] || "",
+          summary: parsed.summary,
+        };
       } catch (parseErr) {
-        console.error("[generateCode] JSON parse failed:", parseErr, "raw:", text.slice(0, 500));
-        throw new Error("AI returned malformed JSON. Try again or switch models in Settings.");
+        console.error("[generateCode] parse failed:", parseErr, "raw:", text.slice(0, 800));
+        throw new Error("The AI response could not be read. Please try again.");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
