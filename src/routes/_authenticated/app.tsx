@@ -444,7 +444,20 @@ function Workspace() {
           </form>
         </section>
 
+        {/* Drag handle */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat and preview panels"
+          onMouseDown={() => setDragging(true)}
+          onDoubleClick={() => { setChatWidth(416); localStorage.setItem("kenzo:chatWidth", "416"); }}
+          className={`hidden lg:flex w-1.5 shrink-0 cursor-col-resize items-center justify-center group ${dragging ? "bg-primary/40" : "hover:bg-primary/25"} transition-colors`}
+        >
+          <div className={`h-10 w-0.5 rounded-full ${dragging ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
+        </div>
+
         {/* Code + Preview */}
+
         <section className="flex-1 flex flex-col min-w-0">
           <div className="h-14 flex items-center justify-between px-4 border-b border-glass-border glass">
             <div className="flex gap-1 rounded-lg bg-input p-1">
