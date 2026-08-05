@@ -343,7 +343,7 @@ function Workspace() {
               <button onClick={() => selectProject(p)} className="flex-1 text-left px-3 py-2 text-sm truncate">
                 {p.name}
               </button>
-              <button onClick={() => deleteProject(p.id)} className="opacity-0 group-hover:opacity-100 p-2 text-muted-foreground hover:text-destructive transition">
+              <button onClick={() => setDeleteTarget({ id: p.id, name: p.name })} aria-label={`Delete ${p.name}`} className="opacity-0 group-hover:opacity-100 p-2 text-muted-foreground hover:text-destructive transition">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
