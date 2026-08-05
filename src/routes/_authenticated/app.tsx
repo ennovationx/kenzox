@@ -409,6 +409,24 @@ function Workspace() {
               </button>
             </div>
             <div className="flex items-center gap-1">
+              {rightTab === "preview" && (
+                <div className="hidden md:flex gap-1 rounded-lg bg-input p-1 mr-1">
+                  {([
+                    ["desktop", Monitor, "Desktop"],
+                    ["tablet", Tablet, "Tablet"],
+                    ["mobile", Smartphone, "Mobile"],
+                  ] as const).map(([key, Icon, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setDevice(key)}
+                      title={label}
+                      className={`p-1.5 rounded-md transition ${device === key ? "gradient-brand text-primary-foreground" : "hover:bg-surface text-muted-foreground"}`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </button>
+                  ))}
+                </div>
+              )}
               <button onClick={() => setPreviewNonce((n) => n + 1)} title="Refresh preview" className="p-2 rounded-lg hover:bg-surface transition">
                 <RefreshCw className="h-4 w-4" />
               </button>
@@ -418,42 +436,107 @@ function Workspace() {
               }} title="Open preview in a new tab" className="p-2 rounded-lg hover:bg-surface transition">
                 <ExternalLink className="h-4 w-4" />
               </button>
-              <button onClick={exportZip} title="Export" className="p-2 rounded-lg hover:bg-surface transition">
-                <Download className="h-4 w-4" />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setExportOpen((v) => !v)}
+                  title="Download"
+                  className="inline-flex items-center gap-1 p-2 rounded-lg hover:bg-surface transition"
+                >
+                  {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                </button>
+                {exportOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-60 z-50 rounded-xl glass-strong border border-glass-border shadow-lift p-1 animate-fade-in-up">
+                      <button onClick={downloadZip} className="w-full flex items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface transition">
+                        <FileArchive className="h-4 w-4 mt-0.5 text-primary" />
+                        <span>
+                          <span className="block text-sm font-medium">Download ZIP</span>
+                          <span className="block text-xs text-muted-foreground">All 3 files + README</span>
+                        </span>
+                      </button>
+                      <button onClick={downloadSingleHtml} className="w-full flex items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface transition">
+                        <FileText className="h-4 w-4 mt-0.5 text-primary" />
+                        <span>
+                          <span className="block text-sm font-medium">Single HTML file</span>
+                          <span className="block text-xs text-muted-foreground">CSS + JS inlined</span>
+                        </span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
           {rightTab === "code" ? (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex gap-1 px-4 pt-3 border-b border-glass-border">
-                {(["index.html", "styles.css", "script.js"] as const).map((name) => {
-                  const Icon = name === "index.html" ? FileText : name === "styles.css" ? Palette : FileCode;
-                  return (
-                    <button key={name} onClick={() => setActiveFile(name)} className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-medium border-b-2 transition ${activeFile === name ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                      <Icon className="h-3.5 w-3.5" /> {name}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between gap-2 px-4 pt-3 border-b border-glass-border">
+                <div className="flex gap-1 overflow-x-auto">
+                  {(["index.html", "styles.css", "script.js"] as const).map((name) => {
+                    const Icon = name === "index.html" ? FileText : name === "styles.css" ? Palette : FileCode;
+                    return (
+                      <button key={name} onClick={() => setActiveFile(name)} className={`inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition ${activeFile === name ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+                        <Icon className="h-3.5 w-3.5" /> {name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2 pb-2">
+                  <span className="hidden sm:inline text-[11px] text-muted-foreground tabular-nums">
+                    {files[activeFile].split("\n").length} lines · {(new Blob([files[activeFile]]).size / 1024).toFixed(1)} KB
+                  </span>
+                  <button onClick={copyActiveFile} title="Copy file" className="p-1.5 rounded-md hover:bg-surface transition text-muted-foreground hover:text-foreground">
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-              <textarea
-                key={activeFile}
-                value={files[activeFile]}
-                onChange={(e) => updateFile(activeFile, e.target.value)}
-                spellCheck={false}
-                className="flex-1 w-full resize-none bg-surface font-mono text-xs p-4 outline-none border-0 leading-relaxed"
-                style={{ tabSize: 2 }}
-              />
+              <div className="flex-1 min-h-0 flex bg-surface overflow-hidden">
+                <div
+                  aria-hidden
+                  ref={gutterRef}
+                  className="hidden sm:block select-none overflow-hidden border-r border-glass-border px-3 py-4 text-right font-mono text-xs leading-relaxed text-muted-foreground/60"
+                >
+                  {files[activeFile].split("\n").map((_, i) => (
+                    <div key={i}>{i + 1}</div>
+                  ))}
+                </div>
+                <textarea
+                  key={activeFile}
+                  value={files[activeFile]}
+                  onChange={(e) => updateFile(activeFile, e.target.value)}
+                  onScroll={(e) => { if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop; }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Tab") {
+                      e.preventDefault();
+                      const el = e.currentTarget;
+                      const s = el.selectionStart;
+                      const next = files[activeFile].slice(0, s) + "  " + files[activeFile].slice(el.selectionEnd);
+                      updateFile(activeFile, next);
+                      requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
+                    }
+                  }}
+                  spellCheck={false}
+                  className="flex-1 w-full resize-none bg-transparent font-mono text-xs px-4 py-4 outline-none border-0 leading-relaxed"
+                  style={{ tabSize: 2 }}
+                />
+              </div>
             </div>
           ) : (
-            <div className="flex-1 bg-white">
-              <iframe
-                key={previewNonce}
-                title="Preview"
-                srcDoc={srcDoc}
-                sandbox="allow-scripts allow-forms allow-modals allow-popups"
-                className="w-full h-full border-0 bg-white"
-              />
+            <div className="flex-1 min-h-0 flex items-start justify-center overflow-auto bg-surface p-0 md:p-4">
+              <div
+                className="h-full w-full bg-white md:rounded-xl md:shadow-lift overflow-hidden transition-all duration-300"
+                style={{ maxWidth: device === "mobile" ? 390 : device === "tablet" ? 820 : "100%" }}
+              >
+                <iframe
+                  key={previewNonce}
+                  title="Preview"
+                  srcDoc={srcDoc}
+                  sandbox="allow-scripts allow-forms allow-modals allow-popups"
+                  className="w-full h-full border-0 bg-white"
+                />
+              </div>
             </div>
           )}
         </section>
