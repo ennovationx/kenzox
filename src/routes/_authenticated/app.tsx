@@ -601,6 +601,47 @@ function Workspace() {
           )}
         </section>
       </main>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-title"
+          onKeyDown={(e) => { if (e.key === "Escape") setDeleteTarget(null); }}
+        >
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-fade-in-up" onClick={() => setDeleteTarget(null)} />
+          <div className="relative w-full max-w-md rounded-2xl glass-strong border border-glass-border shadow-lift p-6 animate-fade-in-up">
+            <div className="flex items-start gap-4">
+              <div className="rounded-xl bg-destructive/10 p-3 text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="delete-title" className="text-lg font-semibold">Delete project</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  “{deleteTarget.name}” and its chat history will be permanently removed. This can’t be undone.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg glass px-4 py-2 text-sm font-medium hover:bg-surface transition"
+              >
+                Cancel
+              </button>
+              <button
+                autoFocus
+                onClick={confirmDelete}
+                className="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow-lift hover:opacity-90 transition"
+              >
+                Delete project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
