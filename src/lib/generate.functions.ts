@@ -1,21 +1,38 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateText } from "ai";
+import { streamText } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 
-const SYSTEM = `You are Kenzo, an expert AI web developer.
-You produce COMPLETE, self-contained single-page web apps as three files: index.html, styles.css, script.js.
+const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
+You author COMPLETE, production-quality, self-contained web apps as exactly three files: index.html, styles.css, script.js.
 
-Rules:
-- Respond ONLY with strict JSON matching: {"html":"...","css":"...","js":"...","summary":"..."}
-- No markdown fences, no prose outside JSON.
-- index.html must reference the css and js files via <link rel="stylesheet" href="styles.css"> and <script src="script.js" defer></script>. Include <!doctype html>, <meta charset="utf-8">, viewport meta.
-- Beautiful, modern, responsive UI. Use CSS variables, gradients, subtle shadows. Prefer system-ui / Inter font.
-- No external network/CDN dependencies except Google Fonts if useful.
-- Vanilla JS only unless the user asks otherwise. No build step.
-- Fully functional; no TODOs. Add interactivity when relevant.
-- Keep total output reasonably concise; avoid unnecessary boilerplate.
+OUTPUT CONTRACT
+- Respond with strict JSON ONLY: {"html":"...","css":"...","js":"...","summary":"..."}
+- No markdown fences, no commentary outside the JSON object.
+- Every file must be complete and runnable. Never emit placeholders, "..." elisions, or TODOs.
+
+index.html
+- Start with <!doctype html>. Include <meta charset="utf-8">, <meta name="viewport" content="width=device-width, initial-scale=1">, a descriptive <title> and <meta name="description">.
+- Link assets exactly as: <link rel="stylesheet" href="styles.css"> in <head> and <script src="script.js" defer></script> before </body>.
+- Semantic HTML: header/nav/main/section/footer, one <h1>, labels tied to inputs, alt text, aria-labels on icon-only buttons.
+
+styles.css
+- Own the entire visual design here — no inline styles in the HTML.
+- Define a token layer in :root (colors, radii, spacing, shadows, transitions) and support dark mode via [data-theme="dark"] or prefers-color-scheme.
+- Modern layout with flexbox/grid, fluid typography with clamp(), generous whitespace, rounded corners, layered shadows, tasteful gradients, and hover/focus-visible states.
+- Fully responsive: mobile-first, with breakpoints for tablet and desktop. Include subtle keyframe animations and honor prefers-reduced-motion.
+
+script.js
+- Vanilla ES6+ only, no frameworks, no build step, no CDN scripts. Wrap in an IIFE or use modules-free scoped code.
+- Implement every interaction the UI implies: state, event handlers, validation, empty/loading/error states, keyboard support, and localStorage persistence when the app has data worth keeping.
+- Guard DOM lookups and never throw on first load.
+
+QUALITY BAR
+- Distinctive, polished visual design — never a plain unstyled document.
+- Real, plausible content instead of lorem ipsum.
+- No external network calls except Google Fonts, which is allowed via a <link> in the head.
+- Keep the code clean, commented where non-obvious, and free of dead code.
 `;
 
 const Input = z.object({
@@ -34,13 +51,14 @@ const Input = z.object({
 });
 
 const ALLOWED_MODELS = new Set([
-  "google/gemini-2.5-flash-lite",
-  "google/gemini-2.5-flash",
-  "google/gemini-2.5-pro",
   "google/gemini-3.6-flash",
+  "google/gemini-3.5-flash",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite",
+  "google/gemini-2.5-pro",
 ]);
 
-const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
+const DEFAULT_MODEL = "google/gemini-3.6-flash";
 
 function extractJson(text: string): { html: string; css: string; js: string; summary: string } {
   let t = (text ?? "").trim();
@@ -104,15 +122,19 @@ Return JSON: {"html":"...","css":"...","js":"...","summary":"..."}`
     if (modelId.startsWith("openai/gpt-5.6")) {
       lovableOpts.reasoningEffort = "none";
     }
-    const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof generateText>[0]["providerOptions"];
+    const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof streamText>[0]["providerOptions"];
 
     try {
-      const { text } = await generateText({
+      // Streamed on the wire (consumed server-side) so long generations keep
+      // bytes flowing and never trip the platform's idle-request timeout.
+      const result = streamText({
         model,
         system: sys,
         prompt: userMsg,
+        maxOutputTokens: 32000,
         providerOptions,
       });
+      const text = await result.text;
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {

@@ -8,6 +8,7 @@ import { generateCode } from "@/lib/generate.functions";
 import {
   Plus, Send, RefreshCw, Download, ExternalLink, Trash2, Settings, LogOut,
   FileCode, Palette, FileText, Loader2, Menu, X, Sparkles,
+  Monitor, Tablet, Smartphone, ChevronDown, FileArchive, Copy,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -57,7 +58,11 @@ function Workspace() {
   const [previewNonce, setPreviewNonce] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [zipping, setZipping] = useState(false);
+  const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
 
+  const gutterRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const generate = useServerFn(generateCode);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -202,17 +207,57 @@ function Workspace() {
     }
   }
 
-  function exportZip() {
-    // Minimal ZIP alternative: bundle as a single downloadable HTML with inlined assets.
-    const merged = buildSrcDoc(files);
-    const blob = new Blob([merged], { type: "text/html" });
+  function projectSlug() {
+    return (projects.find((p) => p.id === activeId)?.name || "kenzo-app")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "kenzo-app";
+  }
+
+  function triggerDownload(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${(projects.find((p) => p.id === activeId)?.name || "kenzo-app").replace(/[^a-z0-9-_]+/gi, "-")}.html`;
+    a.download = filename;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Downloaded single-file HTML export");
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function downloadZip() {
+    try {
+      setZipping(true);
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      zip.file("index.html", files["index.html"]);
+      zip.file("styles.css", files["styles.css"]);
+      zip.file("script.js", files["script.js"]);
+      zip.file(
+        "README.md",
+        `# ${projects.find((p) => p.id === activeId)?.name || "Kenzo app"}\n\nGenerated with Kenzo.\n\n## Run locally\n\nOpen \`index.html\` in your browser, or serve the folder:\n\n\`\`\`bash\nnpx serve .\n\`\`\`\n\n## Files\n\n- \`index.html\` — markup\n- \`styles.css\` — styles\n- \`script.js\` — behaviour\n`,
+      );
+      const blob = await zip.generateAsync({ type: "blob" });
+      triggerDownload(blob, `${projectSlug()}.zip`);
+      toast.success("Downloaded project ZIP");
+    } catch {
+      toast.error("Could not build the ZIP file");
+    } finally {
+      setZipping(false);
+      setExportOpen(false);
+    }
+  }
+
+  function downloadSingleHtml() {
+    triggerDownload(new Blob([buildSrcDoc(files)], { type: "text/html" }), `${projectSlug()}.html`);
+    toast.success("Downloaded single-file HTML");
+    setExportOpen(false);
+  }
+
+  async function copyActiveFile() {
+    await navigator.clipboard.writeText(files[activeFile]);
+    toast.success(`${activeFile} copied`);
   }
 
   async function signOut() {
@@ -367,6 +412,24 @@ function Workspace() {
               </button>
             </div>
             <div className="flex items-center gap-1">
+              {rightTab === "preview" && (
+                <div className="hidden md:flex gap-1 rounded-lg bg-input p-1 mr-1">
+                  {([
+                    ["desktop", Monitor, "Desktop"],
+                    ["tablet", Tablet, "Tablet"],
+                    ["mobile", Smartphone, "Mobile"],
+                  ] as const).map(([key, Icon, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setDevice(key)}
+                      title={label}
+                      className={`p-1.5 rounded-md transition ${device === key ? "gradient-brand text-primary-foreground" : "hover:bg-surface text-muted-foreground"}`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </button>
+                  ))}
+                </div>
+              )}
               <button onClick={() => setPreviewNonce((n) => n + 1)} title="Refresh preview" className="p-2 rounded-lg hover:bg-surface transition">
                 <RefreshCw className="h-4 w-4" />
               </button>
@@ -376,42 +439,107 @@ function Workspace() {
               }} title="Open preview in a new tab" className="p-2 rounded-lg hover:bg-surface transition">
                 <ExternalLink className="h-4 w-4" />
               </button>
-              <button onClick={exportZip} title="Export" className="p-2 rounded-lg hover:bg-surface transition">
-                <Download className="h-4 w-4" />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setExportOpen((v) => !v)}
+                  title="Download"
+                  className="inline-flex items-center gap-1 p-2 rounded-lg hover:bg-surface transition"
+                >
+                  {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                </button>
+                {exportOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setExportOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-60 z-50 rounded-xl glass-strong border border-glass-border shadow-lift p-1 animate-fade-in-up">
+                      <button onClick={downloadZip} className="w-full flex items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface transition">
+                        <FileArchive className="h-4 w-4 mt-0.5 text-primary" />
+                        <span>
+                          <span className="block text-sm font-medium">Download ZIP</span>
+                          <span className="block text-xs text-muted-foreground">All 3 files + README</span>
+                        </span>
+                      </button>
+                      <button onClick={downloadSingleHtml} className="w-full flex items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface transition">
+                        <FileText className="h-4 w-4 mt-0.5 text-primary" />
+                        <span>
+                          <span className="block text-sm font-medium">Single HTML file</span>
+                          <span className="block text-xs text-muted-foreground">CSS + JS inlined</span>
+                        </span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
           {rightTab === "code" ? (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex gap-1 px-4 pt-3 border-b border-glass-border">
-                {(["index.html", "styles.css", "script.js"] as const).map((name) => {
-                  const Icon = name === "index.html" ? FileText : name === "styles.css" ? Palette : FileCode;
-                  return (
-                    <button key={name} onClick={() => setActiveFile(name)} className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-medium border-b-2 transition ${activeFile === name ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                      <Icon className="h-3.5 w-3.5" /> {name}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between gap-2 px-4 pt-3 border-b border-glass-border">
+                <div className="flex gap-1 overflow-x-auto">
+                  {(["index.html", "styles.css", "script.js"] as const).map((name) => {
+                    const Icon = name === "index.html" ? FileText : name === "styles.css" ? Palette : FileCode;
+                    return (
+                      <button key={name} onClick={() => setActiveFile(name)} className={`inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition ${activeFile === name ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+                        <Icon className="h-3.5 w-3.5" /> {name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2 pb-2">
+                  <span className="hidden sm:inline text-[11px] text-muted-foreground tabular-nums">
+                    {files[activeFile].split("\n").length} lines · {(new Blob([files[activeFile]]).size / 1024).toFixed(1)} KB
+                  </span>
+                  <button onClick={copyActiveFile} title="Copy file" className="p-1.5 rounded-md hover:bg-surface transition text-muted-foreground hover:text-foreground">
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-              <textarea
-                key={activeFile}
-                value={files[activeFile]}
-                onChange={(e) => updateFile(activeFile, e.target.value)}
-                spellCheck={false}
-                className="flex-1 w-full resize-none bg-surface font-mono text-xs p-4 outline-none border-0 leading-relaxed"
-                style={{ tabSize: 2 }}
-              />
+              <div className="flex-1 min-h-0 flex bg-surface overflow-hidden">
+                <div
+                  aria-hidden
+                  ref={gutterRef}
+                  className="hidden sm:block select-none overflow-hidden border-r border-glass-border px-3 py-4 text-right font-mono text-xs leading-relaxed text-muted-foreground/60"
+                >
+                  {files[activeFile].split("\n").map((_, i) => (
+                    <div key={i}>{i + 1}</div>
+                  ))}
+                </div>
+                <textarea
+                  key={activeFile}
+                  value={files[activeFile]}
+                  onChange={(e) => updateFile(activeFile, e.target.value)}
+                  onScroll={(e) => { if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop; }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Tab") {
+                      e.preventDefault();
+                      const el = e.currentTarget;
+                      const s = el.selectionStart;
+                      const next = files[activeFile].slice(0, s) + "  " + files[activeFile].slice(el.selectionEnd);
+                      updateFile(activeFile, next);
+                      requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
+                    }
+                  }}
+                  spellCheck={false}
+                  className="flex-1 w-full resize-none bg-transparent font-mono text-xs px-4 py-4 outline-none border-0 leading-relaxed"
+                  style={{ tabSize: 2 }}
+                />
+              </div>
             </div>
           ) : (
-            <div className="flex-1 bg-white">
-              <iframe
-                key={previewNonce}
-                title="Preview"
-                srcDoc={srcDoc}
-                sandbox="allow-scripts allow-forms allow-modals allow-popups"
-                className="w-full h-full border-0 bg-white"
-              />
+            <div className="flex-1 min-h-0 flex items-start justify-center overflow-auto bg-surface p-0 md:p-4">
+              <div
+                className="h-full w-full bg-white md:rounded-xl md:shadow-lift overflow-hidden transition-all duration-300"
+                style={{ maxWidth: device === "mobile" ? 390 : device === "tablet" ? 820 : "100%" }}
+              >
+                <iframe
+                  key={previewNonce}
+                  title="Preview"
+                  srcDoc={srcDoc}
+                  sandbox="allow-scripts allow-forms allow-modals allow-popups"
+                  className="w-full h-full border-0 bg-white"
+                />
+              </div>
             </div>
           )}
         </section>
