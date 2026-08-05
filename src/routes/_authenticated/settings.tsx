@@ -35,7 +35,7 @@ function SettingsPage() {
   const [personality, setPersonality] = useState("balanced");
   const [verbosity, setVerbosity] = useState("normal");
   const [style, setStyle] = useState("modern");
-  const [model, setModel] = useState("google/gemini-2.5-flash-lite");
+  const [model, setModel] = useState("google/gemini-3.6-flash");
   const [password, setPassword] = useState("");
   const [theme, setThemeState] = useState<Theme>(getStoredTheme());
   const [saving, setSaving] = useState(false);
