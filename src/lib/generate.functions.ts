@@ -69,21 +69,84 @@ const ALLOWED_MODELS = new Set([
   "google/gemini-2.5-pro",
 ]);
 
-const DEFAULT_MODEL = "google/gemini-3.6-flash";
+const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
 
-function extractJson(text: string): { html: string; css: string; js: string; summary: string } {
-  let t = (text ?? "").trim();
-  if (t.startsWith("```")) t = t.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  const first = t.indexOf("{");
-  const last = t.lastIndexOf("}");
-  if (first !== -1 && last !== -1) t = t.slice(first, last + 1);
-  const parsed = JSON.parse(t);
-  return {
-    html: String(parsed.html ?? ""),
-    css: String(parsed.css ?? ""),
-    js: String(parsed.js ?? ""),
-    summary: String(parsed.summary ?? "Updated your app."),
+type Result = { html: string; css: string; js: string; summary: string };
+
+function stripFences(s: string) {
+  return s
+    .replace(/^\s*```[a-z]*\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
+    .trim();
+}
+
+/** Parse the marker protocol; fall back to JSON, then to fenced code blocks. */
+function parseResult(text: string): Result {
+  const t = (text ?? "").replace(/\r\n/g, "\n");
+
+  const grab = (name: string) => {
+    const re = new RegExp(
+      `<<<FILE:${name.replace(".", "\\.")}>>>\\n?([\\s\\S]*?)(?=\\n?<<<(?:FILE:|SUMMARY|END)|$)`,
+      "i",
+    );
+    const m = t.match(re);
+    return m ? stripFences(m[1]) : "";
   };
+
+  const html = grab("index.html");
+  const css = grab("styles.css");
+  const js = grab("script.js");
+  const sum = t.match(/<<<SUMMARY>>>\n?([\s\S]*?)(?=\n?<<<END|$)/i);
+
+  if (html || css || js) {
+    return {
+      html,
+      css,
+      js,
+      summary: (sum ? sum[1].trim() : "") || "Updated your app.",
+    };
+  }
+
+  // Fallback 1: strict JSON payload
+  try {
+    let j = t.trim();
+    if (j.startsWith("```")) j = stripFences(j);
+    const first = j.indexOf("{");
+    const last = j.lastIndexOf("}");
+    if (first !== -1 && last !== -1) j = j.slice(first, last + 1);
+    const parsed = JSON.parse(j);
+    if (parsed && (parsed.html || parsed.css || parsed.js)) {
+      return {
+        html: String(parsed.html ?? ""),
+        css: String(parsed.css ?? ""),
+        js: String(parsed.js ?? ""),
+        summary: String(parsed.summary ?? "Updated your app."),
+      };
+    }
+  } catch {
+    /* keep going */
+  }
+
+  // Fallback 2: fenced code blocks by language
+  const block = (langs: string[]) => {
+    for (const l of langs) {
+      const m = t.match(new RegExp("```" + l + "\\s*\\n([\\s\\S]*?)```", "i"));
+      if (m) return m[1].trim();
+    }
+    return "";
+  };
+  const fHtml = block(["html"]);
+  const fCss = block(["css"]);
+  const fJs = block(["js", "javascript"]);
+  if (fHtml || fCss || fJs) {
+    return { html: fHtml, css: fCss, js: fJs, summary: "Updated your app." };
+  }
+
+  // Fallback 3: a bare HTML document
+  const doc = t.match(/<!doctype html[\s\S]*<\/html>/i);
+  if (doc) return { html: doc[0], css: "", js: "", summary: "Updated your app." };
+
+  throw new Error("no-parse");
 }
 
 export const generateCode = createServerFn({ method: "POST" })
