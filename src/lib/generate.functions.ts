@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { streamText } from "ai";
+import { streamText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 
@@ -16,9 +16,13 @@ OUTPUT CONTRACT — follow EXACTLY, no JSON, no markdown fences:
 ...complete js...
 <<<SUMMARY>>>
 One or two sentences describing what you built or changed.
+<<<NAME>>>
+A short 2-5 word project name (only when the user asked to rename the app/site, or when this is the first build).
+<<<MEMORY>>>
+One durable preference per line that you learned about this user (e.g. "prefers dark, minimal designs"). Omit this block entirely if nothing new.
 <<<END>>>
 
-- Emit the markers on their own lines, in that exact order, exactly once each.
+- Emit the markers on their own lines, in that exact order. FILE and SUMMARY are required; NAME and MEMORY are optional.
 - Write raw file contents between markers — never escape them, never wrap them in backticks.
 - No commentary before the first marker or after <<<END>>>.
 - Every file must be complete and runnable. Never emit placeholders, "..." elisions, or TODOs.
@@ -55,6 +59,8 @@ const Input = z.object({
       "script.js": z.string().optional(),
     })
     .optional(),
+  images: z.array(z.string()).max(4).optional(),
+  plan: z.string().max(8000).optional(),
   personality: z.string().optional(),
   verbosity: z.string().optional(),
   style: z.string().optional(),
@@ -71,7 +77,7 @@ const ALLOWED_MODELS = new Set([
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
 
-type Result = { html: string; css: string; js: string; summary: string };
+type Result = { html: string; css: string; js: string; summary: string; name?: string; memory: string[] };
 
 function stripFences(s: string) {
   return s
@@ -83,10 +89,11 @@ function stripFences(s: string) {
 /** Parse the marker protocol; fall back to JSON, then to fenced code blocks. */
 function parseResult(text: string): Result {
   const t = (text ?? "").replace(/\r\n/g, "\n");
+  const STOP = "(?:FILE:|SUMMARY|NAME|MEMORY|END)";
 
   const grab = (name: string) => {
     const re = new RegExp(
-      `<<<FILE:${name.replace(".", "\\.")}>>>\\n?([\\s\\S]*?)(?=\\n?<<<(?:FILE:|SUMMARY|END)|$)`,
+      `<<<FILE:${name.replace(".", "\\.")}>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`,
       "i",
     );
     const m = t.match(re);
@@ -96,7 +103,15 @@ function parseResult(text: string): Result {
   const html = grab("index.html");
   const css = grab("styles.css");
   const js = grab("script.js");
-  const sum = t.match(/<<<SUMMARY>>>\n?([\s\S]*?)(?=\n?<<<END|$)/i);
+  const sum = t.match(new RegExp(`<<<SUMMARY>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`, "i"));
+  const nameM = t.match(new RegExp(`<<<NAME>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`, "i"));
+  const memM = t.match(new RegExp(`<<<MEMORY>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`, "i"));
+
+  const memory = (memM ? memM[1] : "")
+    .split("\n")
+    .map((l) => l.replace(/^[-*•]\s*/, "").trim())
+    .filter((l) => l.length > 2 && l.length < 200)
+    .slice(0, 5);
 
   if (html || css || js) {
     return {
@@ -104,6 +119,8 @@ function parseResult(text: string): Result {
       css,
       js,
       summary: (sum ? sum[1].trim() : "") || "Updated your app.",
+      name: nameM ? nameM[1].trim().replace(/^["“]|["”]$/g, "").slice(0, 60) || undefined : undefined,
+      memory,
     };
   }
 
@@ -121,6 +138,7 @@ function parseResult(text: string): Result {
         css: String(parsed.css ?? ""),
         js: String(parsed.js ?? ""),
         summary: String(parsed.summary ?? "Updated your app."),
+        memory: [],
       };
     }
   } catch {
@@ -139,12 +157,12 @@ function parseResult(text: string): Result {
   const fCss = block(["css"]);
   const fJs = block(["js", "javascript"]);
   if (fHtml || fCss || fJs) {
-    return { html: fHtml, css: fCss, js: fJs, summary: "Updated your app." };
+    return { html: fHtml, css: fCss, js: fJs, summary: "Updated your app.", memory: [] };
   }
 
   // Fallback 3: a bare HTML document
   const doc = t.match(/<!doctype html[\s\S]*<\/html>/i);
-  if (doc) return { html: doc[0], css: "", js: "", summary: "Updated your app." };
+  if (doc) return { html: doc[0], css: "", js: "", summary: "Updated your app.", memory: [] };
 
   throw new Error("no-parse");
 }
@@ -152,7 +170,7 @@ function parseResult(text: string): Result {
 export const generateCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
 
@@ -166,10 +184,23 @@ export const generateCode = createServerFn({ method: "POST" })
     const cf = data.currentFiles ?? {};
     const hasCurrent = cf["index.html"] || cf["styles.css"] || cf["script.js"];
 
-    const CONTRACT = `Respond using the marker format only:
-<<<FILE:index.html>>> … <<<FILE:styles.css>>> … <<<FILE:script.js>>> … <<<SUMMARY>>> … <<<END>>>`;
+    // Per-user long-term memory
+    const { data: memRows } = await context.supabase
+      .from("user_memory")
+      .select("fact")
+      .order("created_at", { ascending: false })
+      .limit(25);
+    const memory = (memRows ?? []).map((r) => r.fact as string);
 
-    const userMsg = hasCurrent
+    const CONTRACT = `Respond using the marker format only:
+<<<FILE:index.html>>> … <<<FILE:styles.css>>> … <<<FILE:script.js>>> … <<<SUMMARY>>> … (optional <<<NAME>>>, <<<MEMORY>>>) … <<<END>>>`;
+
+    const planBlock = data.plan ? `\n\nApproved plan to implement:\n${data.plan}\n` : "";
+    const imageBlock = (data.images ?? []).length
+      ? `\n\nThe user attached ${data.images!.length} reference image(s). Study them closely and match the layout, colours, spacing and mood as faithfully as you can.`
+      : "";
+
+    const userText = hasCurrent
       ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required. Always return ALL THREE files in full.
 
 Current index.html:
@@ -183,11 +214,19 @@ ${cf["script.js"] ?? ""}
 
 User request:
 ${data.prompt}
+${planBlock}${imageBlock}
 
 ${CONTRACT}`
-      : `Build a fresh, complete app for this request.\n\n${data.prompt}\n\n${CONTRACT}`;
+      : `Build a fresh, complete app for this request.\n\n${data.prompt}\n${planBlock}${imageBlock}\n\n${CONTRACT}`;
 
-    const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.`;
+    const parts: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [
+      { type: "text", text: userText },
+    ];
+    for (const img of data.images ?? []) parts.push({ type: "image", image: img });
+    const messages: ModelMessage[] = [{ role: "user", content: parts }];
+
+    const memBlock = memory.length ? `\n\nRemembered about this user:\n- ${memory.join("\n- ")}` : "";
+    const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.${memBlock}`;
 
     const lovableOpts: Record<string, unknown> = {};
     if (modelId.startsWith("openai/gpt-5.6")) {
@@ -201,7 +240,7 @@ ${CONTRACT}`
       const result = streamText({
         model,
         system: sys,
-        prompt: userMsg,
+        messages,
         maxOutputTokens: 32000,
         providerOptions,
       });
@@ -210,12 +249,22 @@ ${CONTRACT}`
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
         const parsed = parseResult(text);
+
+        const fresh = parsed.memory.filter((f) => !memory.includes(f));
+        if (fresh.length) {
+          await context.supabase
+            .from("user_memory")
+            .insert(fresh.map((fact) => ({ user_id: context.userId, fact })));
+        }
+
         // Keep unchanged files instead of blanking them out.
         return {
           html: parsed.html || cf["index.html"] || "",
           css: parsed.css || cf["styles.css"] || "",
           js: parsed.js || cf["script.js"] || "",
           summary: parsed.summary,
+          name: parsed.name ?? null,
+          memory: fresh,
         };
       } catch (parseErr) {
         console.error("[generateCode] parse failed:", parseErr, "raw:", text.slice(0, 800));

@@ -16,32 +16,85 @@ export type Database = {
     Tables: {
       chat_messages: {
         Row: {
+          attachments: Json
           content: string
           created_at: string
+          feedback: string | null
           id: string
+          mode: string
           project_id: string
           role: string
+          snapshot: Json | null
           user_id: string
         }
         Insert: {
+          attachments?: Json
           content: string
           created_at?: string
+          feedback?: string | null
           id?: string
+          mode?: string
           project_id: string
           role: string
+          snapshot?: Json | null
           user_id: string
         }
         Update: {
+          attachments?: Json
           content?: string
           created_at?: string
+          feedback?: string | null
           id?: string
+          mode?: string
           project_id?: string
           role?: string
+          snapshot?: Json | null
           user_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "chat_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          project_id: string | null
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -94,29 +147,97 @@ export type Database = {
         }
         Relationships: []
       }
+      project_shares: {
+        Row: {
+          created_at: string
+          id: string
+          invited_email: string
+          owner_id: string
+          project_id: string
+          role: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_email: string
+          owner_id: string
+          project_id: string
+          role?: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_email?: string
+          owner_id?: string
+          project_id?: string
+          role?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_shares_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
+          assets: Json
           created_at: string
           files: Json
           id: string
+          is_draft: boolean
           name: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          assets?: Json
           created_at?: string
           files?: Json
           id?: string
+          is_draft?: boolean
           name?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          assets?: Json
           created_at?: string
           files?: Json
           id?: string
+          is_draft?: boolean
           name?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_memory: {
+        Row: {
+          created_at: string
+          fact: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fact: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fact?: string
+          id?: string
           user_id?: string
         }
         Relationships: []
@@ -153,6 +274,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      owns_project: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      share_role: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: string
       }
     }
     Enums: {
