@@ -258,7 +258,7 @@ function Workspace() {
 
     const seen = new Set<string>();
     const rows: ProjectRow[] = [];
-    for (const r of [...(own.data ?? []), ...((shared.data ?? []) as typeof own.data ?? [])] as ProjectRow[]) {
+    for (const r of [...(own.data ?? []), ...(shared.data ?? [])] as ProjectRow[]) {
       if (seen.has(r.id)) continue;
       seen.add(r.id);
       rows.push(r);
@@ -281,7 +281,7 @@ function Workspace() {
         .maybeSingle();
       setProfile(p as Profile | null);
 
-      const list = await loadProjects();
+      const list = await loadProjects(u.user.id);
       setProjects(list);
 
       const wanted = new URLSearchParams(window.location.search).get("project");
