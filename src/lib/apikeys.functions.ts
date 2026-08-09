@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-async function requireAdmin(userId: string, supabase: { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function requireAdmin(userId: string, supabase: any) {
   const { data, error } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
   if (error || !data) throw new Error("Forbidden: admin only");
 }
@@ -50,7 +51,8 @@ export const upsertApiKey = createServerFn({ method: "POST" })
     await requireAdmin(context.userId, context.supabase);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (data.id) {
-      const patch: Record<string, unknown> = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const patch: any = {
         label: data.label,
         priority: data.priority,
         is_active: data.isActive,
