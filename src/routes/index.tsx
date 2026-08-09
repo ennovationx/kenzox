@@ -17,12 +17,12 @@ export const Route = createFileRoute("/")({
 function Landing() {
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 glass border-b border-glass-border">
-        <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
-          <Logo />
-          <nav className="flex items-center gap-2">
-            <Link to="/login" className="px-4 py-2 text-sm font-medium hover:text-primary transition">Log in</Link>
-            <Link to="/signup" className="px-4 py-2 text-sm font-medium rounded-lg gradient-brand text-primary-foreground shadow-lift transition hover:opacity-90">
+      <header className="sticky top-3 z-40 px-3 sm:px-6">
+        <div className="mx-auto max-w-4xl glass rounded-full border border-glass-border shadow-lift px-3 sm:px-5 h-12 flex items-center justify-between">
+          <Logo size={22} />
+          <nav className="flex items-center gap-1">
+            <Link to="/login" className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full hover:bg-surface transition">Log in</Link>
+            <Link to="/signup" className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-full gradient-brand text-primary-foreground shadow-lift transition hover:opacity-90">
               Sign up
             </Link>
           </nav>
@@ -71,8 +71,12 @@ function Landing() {
       </section>
 
       <footer className="border-t border-glass-border">
-        <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="mx-auto max-w-6xl px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <Logo size={22} />
+          <nav className="flex items-center gap-5">
+            <Link to="/privacy" className="hover:text-foreground transition">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-foreground transition">Terms of Service</Link>
+          </nav>
           <span>© {new Date().getFullYear()} Kenzo. Crafted with care.</span>
         </div>
       </footer>
