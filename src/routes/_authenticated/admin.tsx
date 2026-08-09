@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { listUsers, setUserRole, setUserStatus, deleteUser, adminStats } from "@/lib/admin.functions";
+import { listApiKeys, upsertApiKey, deleteApiKey, createUserAccount } from "@/lib/apikeys.functions";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
-import { ArrowLeft, Shield, Users, FolderKanban, MessageSquare, Trash2, Ban, Check } from "lucide-react";
+import { ArrowLeft, Shield, Users, FolderKanban, MessageSquare, Trash2, Ban, Check, KeyRound, Plus, UserPlus, AlertTriangle } from "lucide-react";
+
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
