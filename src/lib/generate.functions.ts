@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { streamText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
+import { resolveAiKeys, reportKeyExhausted } from "./ai-keys.server";
 
 const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
 You author COMPLETE, production-quality, self-contained web apps as exactly three files: index.html, styles.css, script.js.
@@ -171,12 +172,10 @@ export const generateCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const keys = await resolveAiKeys();
+    if (!keys.length) throw new Error("No AI API key is configured. An admin can add one in the admin panel.");
 
     const modelId = data.model && ALLOWED_MODELS.has(data.model) ? data.model : DEFAULT_MODEL;
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway(modelId);
 
     const personality = data.personality ?? "balanced";
     const verbosity = data.verbosity ?? "normal";
@@ -237,14 +236,32 @@ ${CONTRACT}`
     try {
       // Streamed on the wire (consumed server-side) so long generations keep
       // bytes flowing and never trip the platform's idle-request timeout.
-      const result = streamText({
-        model,
-        system: sys,
-        messages,
-        maxOutputTokens: 32000,
-        providerOptions,
-      });
-      const text = await result.text;
+      // Try each configured key in priority order; fall back when one is
+      // rate-limited or out of credits, and tell the admins about it.
+      let text = "";
+      let lastErr: unknown = null;
+      for (let i = 0; i < keys.length; i++) {
+        const k = keys[i]!;
+        try {
+          const result = streamText({
+            model: createLovableAiGatewayProvider(k.api_key)(modelId),
+            system: sys,
+            messages,
+            maxOutputTokens: 32000,
+            providerOptions,
+          });
+          text = await result.text;
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const m = e instanceof Error ? e.message : String(e);
+          const exhausted = m.includes("402") || m.includes("429") || m.includes("401");
+          if (exhausted) await reportKeyExhausted(k, m);
+          if (!exhausted || i === keys.length - 1) throw e;
+        }
+      }
+      if (lastErr) throw lastErr;
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {

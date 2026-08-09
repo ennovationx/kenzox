@@ -233,14 +233,39 @@ function Workspace() {
   }, []);
 
   /* ---------- boot ---------- */
-  const loadProjects = useCallback(async () => {
-    const { data } = await supabase
-      .from("projects")
-      .select("id, name, files, updated_at, user_id")
-      .eq("is_draft", false)
-      .order("updated_at", { ascending: false });
-    return (data ?? []) as ProjectRow[];
+  /** Only the signed-in user's own projects plus ones explicitly shared with them. */
+  const loadProjects = useCallback(async (uid?: string) => {
+    const me = uid ?? (await supabase.auth.getUser()).data.user?.id;
+    if (!me) return [] as ProjectRow[];
+
+    const { data: shares } = await supabase
+      .from("project_shares")
+      .select("project_id")
+      .eq("user_id", me);
+    const sharedIds = (shares ?? []).map((s) => s.project_id as string);
+
+    const base = () =>
+      supabase
+        .from("projects")
+        .select("id, name, files, updated_at, user_id")
+        .eq("is_draft", false)
+        .order("updated_at", { ascending: false });
+
+    const [own, shared] = await Promise.all([
+      base().eq("user_id", me),
+      sharedIds.length ? base().in("id", sharedIds) : Promise.resolve({ data: [] as unknown[] }),
+    ]);
+
+    const seen = new Set<string>();
+    const rows: ProjectRow[] = [];
+    for (const r of [...(own.data ?? []), ...(shared.data ?? [])] as ProjectRow[]) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      rows.push(r);
+    }
+    return rows.sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
   }, []);
+
 
   useEffect(() => {
     (async () => {
@@ -256,7 +281,7 @@ function Workspace() {
         .maybeSingle();
       setProfile(p as Profile | null);
 
-      const list = await loadProjects();
+      const list = await loadProjects(u.user.id);
       setProjects(list);
 
       const wanted = new URLSearchParams(window.location.search).get("project");
