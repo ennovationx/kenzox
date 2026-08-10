@@ -3,7 +3,7 @@
 
 export type AiKey = { id: string | null; label: string; api_key: string };
 
-/** Ordered list of keys to try: active DB keys by priority, then the platform key. */
+/** Ordered list of admin-managed keys to try (by priority). Admin page is the only source. */
 export async function resolveAiKeys(): Promise<AiKey[]> {
   const keys: AiKey[] = [];
   try {
@@ -19,10 +19,9 @@ export async function resolveAiKeys(): Promise<AiKey[]> {
   } catch (e) {
     console.error("[ai-keys] lookup failed:", e);
   }
-  const platform = process.env.LOVABLE_API_KEY;
-  if (platform) keys.push({ id: null, label: "Platform key", api_key: platform });
   return keys;
 }
+
 
 /** Mark a key exhausted and notify every admin once it stops working. */
 export async function reportKeyExhausted(key: AiKey, reason: string) {
