@@ -2,7 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { streamText, type ModelMessage } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "./ai-gateway.server";
+import { createAiModel } from "./ai-gateway.server";
+import { resolveAiKeys } from "./ai-keys.server";
+
 
 const PLANNER_SYSTEM = `You are Kenzo in PLANNER MODE — a friendly senior product designer and web architect.
 
@@ -39,11 +41,15 @@ export const planWithAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const keys = await resolveAiKeys();
+    const key = keys[0]?.api_key;
+    if (!key)
+      throw new Error(
+        "No Gemini API key is configured. An admin must add one in the admin panel (AI API Keys).",
+      );
 
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3.6-flash");
+    const model = createAiModel(key, "google/gemini-2.5-flash");
+
 
     const messages: ModelMessage[] = [];
     for (const h of data.history ?? []) messages.push({ role: h.role, content: h.content });

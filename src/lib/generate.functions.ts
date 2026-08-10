@@ -2,8 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { streamText, type ModelMessage } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "./ai-gateway.server";
+import { createAiModel } from "./ai-gateway.server";
 import { resolveAiKeys, reportKeyExhausted } from "./ai-keys.server";
+
 
 const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
 You author COMPLETE, production-quality, self-contained web apps as exactly three files: index.html, styles.css, script.js.
@@ -173,7 +174,11 @@ export const generateCode = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data, context }) => {
     const keys = await resolveAiKeys();
-    if (!keys.length) throw new Error("No AI API key is configured. An admin can add one in the admin panel.");
+    if (!keys.length)
+      throw new Error(
+        "No Gemini API key is configured. An admin must add one in the admin panel (AI API Keys).",
+      );
+
 
     const modelId = data.model && ALLOWED_MODELS.has(data.model) ? data.model : DEFAULT_MODEL;
 
@@ -244,7 +249,7 @@ ${CONTRACT}`
         const k = keys[i]!;
         try {
           const result = streamText({
-            model: createLovableAiGatewayProvider(k.api_key)(modelId),
+            model: createAiModel(k.api_key, modelId),
             system: sys,
             messages,
             maxOutputTokens: 32000,
