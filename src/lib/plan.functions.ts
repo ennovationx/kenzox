@@ -60,7 +60,6 @@ export const planWithAI = createServerFn({ method: "POST" })
       ? `\n\nThe project already has code. Plan changes on top of it, don't restart from scratch.`
       : "";
 
-    try {
     let lastErr: unknown = null;
     for (let i = 0; i < keys.length; i++) {
       const k = keys[i]!;
@@ -88,5 +87,4 @@ export const planWithAI = createServerFn({ method: "POST" })
       }
     }
     throw new Error(lastErr instanceof Error ? lastErr.message : "Planning failed.");
-  });
   });
