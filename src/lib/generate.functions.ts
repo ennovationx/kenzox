@@ -249,7 +249,7 @@ ${CONTRACT}`
         const k = keys[i]!;
         try {
           const result = streamText({
-            model: createLovableAiGatewayProvider(k.api_key)(modelId),
+            model: createAiModel(k.api_key, modelId),
             system: sys,
             messages,
             maxOutputTokens: 32000,
