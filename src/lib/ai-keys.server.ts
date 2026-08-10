@@ -3,7 +3,7 @@
 
 export type AiKey = { id: string | null; label: string; api_key: string };
 
-/** Ordered list of keys to try: active DB keys by priority, then the platform key. */
+/** Ordered list of admin-configured keys to try (by priority). */
 export async function resolveAiKeys(): Promise<AiKey[]> {
   const keys: AiKey[] = [];
   try {
