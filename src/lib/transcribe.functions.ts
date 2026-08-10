@@ -28,34 +28,43 @@ export const transcribeAudio = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const keys = await resolveAiKeys();
+    if (!keys.length) throw new Error(NO_KEYS_MESSAGE);
 
     const base = data.mime.split(";")[0];
     const ext = EXT[base] ?? "webm";
     const bytes = b64ToBytes(data.audio);
     if (bytes.byteLength < 1024) throw new Error("That recording was empty — please try again.");
 
-    const form = new FormData();
-    form.append("model", "openai/gpt-4o-mini-transcribe");
-    form.append("file", new Blob([bytes], { type: base }), `recording.${ext}`);
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i]!;
+      const form = new FormData();
+      form.append("model", "openai/gpt-4o-mini-transcribe");
+      form.append("file", new Blob([bytes], { type: base }), `recording.${ext}`);
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}` },
-      body: form,
-    });
+      const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${k.api_key}` },
+        body: form,
+      });
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.error("[transcribeAudio]", res.status, body);
-      if (res.status === 429) throw new Error("Rate limit reached — try again in a moment.");
-      if (res.status === 402) throw new Error("AI credits exhausted for this workspace.");
-      throw new Error("Could not transcribe that recording. Please try again.");
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("[transcribeAudio]", res.status, body);
+        const exhausted = res.status === 401 || res.status === 402 || res.status === 429;
+        if (exhausted) await reportKeyExhausted(k, `${res.status} ${body.slice(0, 200)}`);
+        if (!exhausted || i === keys.length - 1) {
+          if (res.status === 429) throw new Error("Rate limit reached — try again in a moment.");
+          if (res.status === 402) throw new Error("AI credits exhausted for this key.");
+          throw new Error("Could not transcribe that recording. Please try again.");
+        }
+        continue;
+      }
+
+      const json = (await res.json()) as { text?: string };
+      const text = (json.text ?? "").trim();
+      if (!text) throw new Error("No speech detected. Try recording again.");
+      return { text };
     }
-
-    const json = (await res.json()) as { text?: string };
-    const text = (json.text ?? "").trim();
-    if (!text) throw new Error("No speech detected. Try recording again.");
-    return { text };
+    throw new Error("Could not transcribe that recording. Please try again.");
   });
