@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { streamText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
+import { resolveAiKeys, reportKeyExhausted, NO_KEYS_MESSAGE } from "./ai-keys.server";
 
 const PLANNER_SYSTEM = `You are Kenzo in PLANNER MODE — a friendly senior product designer and web architect.
 
@@ -39,11 +40,9 @@ export const planWithAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const keys = await resolveAiKeys();
+    if (!keys.length) throw new Error(NO_KEYS_MESSAGE);
 
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3.6-flash");
 
     const messages: ModelMessage[] = [];
     for (const h of data.history ?? []) messages.push({ role: h.role, content: h.content });
@@ -61,21 +60,31 @@ export const planWithAI = createServerFn({ method: "POST" })
       ? `\n\nThe project already has code. Plan changes on top of it, don't restart from scratch.`
       : "";
 
-    try {
-      const result = streamText({
-        model,
-        system: PLANNER_SYSTEM + memoryBlock + filesBlock,
-        messages,
-        maxOutputTokens: 4000,
-      });
-      const text = await result.text;
-      if (!text.trim()) throw new Error("Empty response from AI");
-      return { text: text.trim() };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[planWithAI]", msg);
-      if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
-      if (msg.includes("402")) throw new Error("AI credits exhausted for this workspace.");
-      throw new Error(`Planning failed: ${msg}`);
+    let lastErr: unknown = null;
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i]!;
+      try {
+        const result = streamText({
+          model: createLovableAiGatewayProvider(k.api_key)("google/gemini-3.6-flash"),
+          system: PLANNER_SYSTEM + memoryBlock + filesBlock,
+          messages,
+          maxOutputTokens: 4000,
+        });
+        const text = await result.text;
+        if (!text.trim()) throw new Error("Empty response from AI");
+        return { text: text.trim() };
+      } catch (err) {
+        lastErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[planWithAI]", msg);
+        const exhausted = msg.includes("401") || msg.includes("402") || msg.includes("429");
+        if (exhausted) await reportKeyExhausted(k, msg);
+        if (!exhausted || i === keys.length - 1) {
+          if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
+          if (msg.includes("402")) throw new Error("AI credits exhausted for this key.");
+          throw new Error(`Planning failed: ${msg}`);
+        }
+      }
     }
+    throw new Error(lastErr instanceof Error ? lastErr.message : "Planning failed.");
   });
