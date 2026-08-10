@@ -39,11 +39,9 @@ export const planWithAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const keys = await resolveAiKeys();
+    if (!keys.length) throw new Error(NO_KEYS_MESSAGE);
 
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3.6-flash");
 
     const messages: ModelMessage[] = [];
     for (const h of data.history ?? []) messages.push({ role: h.role, content: h.content });
