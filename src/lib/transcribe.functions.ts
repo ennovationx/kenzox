@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { resolveAiKeys, reportKeyExhausted, NO_KEYS_MESSAGE } from "./ai-keys.server";
 
 const Input = z.object({
   audio: z.string().min(32), // base64 (no data: prefix)
