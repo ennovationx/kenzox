@@ -19,8 +19,7 @@ export async function resolveAiKeys(): Promise<AiKey[]> {
   } catch (e) {
     console.error("[ai-keys] lookup failed:", e);
   }
-  const platform = process.env.LOVABLE_API_KEY;
-  if (platform) keys.push({ id: null, label: "Platform key", api_key: platform });
+  // Only admin-managed keys are used. No platform/built-in key fallback.
   return keys;
 }
 
