@@ -39,12 +39,11 @@ export const planWithAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
-    const { resolveAiKeys } = await import("./ai-keys.server");
-    const keys = await resolveAiKeys();
-    if (!keys.length)
-      throw new Error("No AI API key is configured. An admin can add one in the admin panel.");
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
 
-    const model = createLovableAiGatewayProvider(keys[0]!.api_key)("google/gemini-3.6-flash");
+    const gateway = createLovableAiGatewayProvider(key);
+    const model = gateway("google/gemini-3.6-flash");
 
     const messages: ModelMessage[] = [];
     for (const h of data.history ?? []) messages.push({ role: h.role, content: h.content });

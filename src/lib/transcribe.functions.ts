@@ -28,11 +28,8 @@ export const transcribeAudio = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
-    const { resolveAiKeys } = await import("./ai-keys.server");
-    const keys = await resolveAiKeys();
-    const key = keys[0]?.api_key;
-    if (!key)
-      throw new Error("No AI API key is configured. An admin can add one in the admin panel.");
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
 
     const base = data.mime.split(";")[0];
     const ext = EXT[base] ?? "webm";
