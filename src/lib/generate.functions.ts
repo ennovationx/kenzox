@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { streamText, type ModelMessage } from "ai";
 import { z } from "zod";
-import { createAiModel } from "./ai-gateway.server";
+import { generateWithKey, type AiPart } from "./ai-gateway.server";
 import { resolveAiKeys, reportKeyExhausted } from "./ai-keys.server";
+
 
 
 const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
