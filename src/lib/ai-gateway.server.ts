@@ -1,9 +1,10 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText, type ModelMessage } from "ai";
 
-/** Google AI Studio keys look like "AIza..." — those talk to Gemini directly. */
+/** Google AI Studio keys ("AIza..." legacy, "AQ." new format) talk to Gemini directly. */
 export function isGeminiApiKey(key: string) {
-  return key.trim().startsWith("AIza");
+  const k = key.trim();
+  return k.startsWith("AIza") || k.startsWith("AQ.");
 }
 
 export function createLovableAiGatewayProvider(lovableApiKey: string) {
