@@ -46,7 +46,7 @@ type LogLine = { id: number; level: string; text: string };
 
 const DEFAULT_FILES: Files = {
   "index.html": `<!doctype html>\n<html>\n  <head><meta charset="utf-8"><title>New app</title><link rel="stylesheet" href="styles.css"></head>\n  <body>\n    <main>\n      <h1>Hello from Kenzo</h1>\n      <p>Ask the assistant to build something amazing.</p>\n    </main>\n    <script src="script.js" defer></script>\n  </body>\n</html>`,
-  "styles.css": `body{font-family:system-ui;margin:0;padding:3rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;min-height:100vh}h1{font-size:2.5rem;margin:0 0 .5rem}p{opacity:.85}`,
+  "styles.css": `body{font-family:system-ui;margin:0;padding:3rem;background:#0e0e11;color:#fff;min-height:100vh}h1{font-size:2.5rem;margin:0 0 .5rem}p{opacity:.85}`,
   "script.js": `console.log("Kenzo ready");`,
 };
 

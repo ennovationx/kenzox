@@ -80,11 +80,7 @@
   --glass: oklch(1 0 0 / 0.65);
   --glass-border: oklch(0.58 0.22 285 / 0.18);
 
-  --gradient-brand: linear-gradient(135deg, oklch(0.58 0.22 285), oklch(0.65 0.2 320));
-  --gradient-mesh:
-    radial-gradient(at 20% 10%, oklch(0.58 0.22 285 / 0.35) 0px, transparent 50%),
-    radial-gradient(at 80% 20%, oklch(0.65 0.22 320 / 0.28) 0px, transparent 50%),
-    radial-gradient(at 40% 90%, oklch(0.7 0.18 250 / 0.25) 0px, transparent 50%);
+  --brand-solid: oklch(0.58 0.22 285);
 
   --shadow-glass: 0 8px 32px 0 oklch(0.4 0.15 285 / 0.12), inset 0 1px 0 0 oklch(1 0 0 / 0.5);
   --shadow-lift: 0 10px 40px -10px oklch(0.4 0.15 285 / 0.25);
@@ -92,13 +88,13 @@
 }
 
 .dark {
-  --background: oklch(0.14 0.025 275);
+  --background: oklch(0.09 0 0);
   --foreground: oklch(0.97 0.008 275);
-  --surface: oklch(0.18 0.028 275);
-  --surface-elevated: oklch(0.22 0.03 275);
-  --card: oklch(0.19 0.028 275);
+  --surface: oklch(0.14 0.004 275);
+  --surface-elevated: oklch(0.18 0.006 275);
+  --card: oklch(0.145 0.005 275);
   --card-foreground: oklch(0.97 0.008 275);
-  --popover: oklch(0.19 0.028 275);
+  --popover: oklch(0.15 0.005 275);
   --popover-foreground: oklch(0.97 0.008 275);
 
   --primary: oklch(0.72 0.2 285);
@@ -121,14 +117,10 @@
   --input: oklch(1 0 0 / 0.08);
   --ring: oklch(0.72 0.2 285);
 
-  --glass: oklch(0.22 0.03 275 / 0.55);
+  --glass: oklch(0.2 0.006 275 / 0.55);
   --glass-border: oklch(0.72 0.2 285 / 0.22);
 
-  --gradient-brand: linear-gradient(135deg, oklch(0.72 0.2 285), oklch(0.75 0.2 320));
-  --gradient-mesh:
-    radial-gradient(at 20% 10%, oklch(0.72 0.2 285 / 0.35) 0px, transparent 50%),
-    radial-gradient(at 80% 20%, oklch(0.7 0.22 320 / 0.28) 0px, transparent 50%),
-    radial-gradient(at 40% 90%, oklch(0.6 0.2 250 / 0.28) 0px, transparent 50%);
+  --brand-solid: oklch(0.66 0.2 285);
 
   --shadow-glass: 0 8px 32px 0 oklch(0 0 0 / 0.4), inset 0 1px 0 0 oklch(1 0 0 / 0.05);
   --shadow-lift: 0 10px 40px -10px oklch(0 0 0 / 0.6);
@@ -145,8 +137,6 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    background-image: var(--gradient-mesh);
-    background-attachment: fixed;
   }
   ::selection { background: oklch(0.58 0.22 285 / 0.3); }
 }
@@ -164,13 +154,11 @@
   box-shadow: var(--shadow-glass);
 }
 @utility gradient-brand {
-  background-image: var(--gradient-brand);
+  background-color: var(--brand-solid);
+  background-image: none;
 }
 @utility text-gradient {
-  background-image: var(--gradient-brand);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--brand-solid);
 }
 @utility shadow-glow {
   box-shadow: var(--shadow-glow);
