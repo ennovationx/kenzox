@@ -37,7 +37,7 @@ index.html
 styles.css
 - Own the entire visual design here — no inline styles in the HTML.
 - Define a token layer in :root (colors, radii, spacing, shadows, transitions) and support dark mode via [data-theme="dark"] or prefers-color-scheme.
-- Modern layout with flexbox/grid, fluid typography with clamp(), generous whitespace, rounded corners, layered shadows, tasteful gradients, and hover/focus-visible states.
+- Modern layout with flexbox/grid, fluid typography with clamp(), generous whitespace, rounded corners, layered shadows, and hover/focus-visible states. Use beautiful SOLID colors and glassmorphism — never CSS gradients.
 - Fully responsive: mobile-first, with breakpoints for tablet and desktop. Include subtle keyframe animations and honor prefers-reduced-motion.
 
 script.js
