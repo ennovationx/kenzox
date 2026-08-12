@@ -223,50 +223,40 @@ ${planBlock}${imageBlock}
 ${CONTRACT}`
       : `Build a fresh, complete app for this request.\n\n${data.prompt}\n${planBlock}${imageBlock}\n\n${CONTRACT}`;
 
-    const parts: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [
-      { type: "text", text: userText },
-    ];
+    const parts: AiPart[] = [{ type: "text", text: userText }];
     for (const img of data.images ?? []) parts.push({ type: "image", image: img });
-    const messages: ModelMessage[] = [{ role: "user", content: parts }];
 
     const memBlock = memory.length ? `\n\nRemembered about this user:\n- ${memory.join("\n- ")}` : "";
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.${memBlock}`;
 
-    const lovableOpts: Record<string, unknown> = {};
-    if (modelId.startsWith("openai/gpt-5.6")) {
-      lovableOpts.reasoningEffort = "none";
-    }
-    const providerOptions = { lovable: lovableOpts } as unknown as Parameters<typeof streamText>[0]["providerOptions"];
-
     try {
-      // Streamed on the wire (consumed server-side) so long generations keep
-      // bytes flowing and never trip the platform's idle-request timeout.
-      // Try each configured key in priority order; fall back when one is
-      // rate-limited or out of credits, and tell the admins about it.
+      // Try each configured key in priority order; fall back when one fails,
+      // and tell the admins when a key is rate-limited or out of credits.
       let text = "";
       let lastErr: unknown = null;
       for (let i = 0; i < keys.length; i++) {
         const k = keys[i]!;
         try {
-          const result = streamText({
-            model: createAiModel(k.api_key, modelId),
+          text = await generateWithKey({
+            apiKey: k.api_key,
+            modelId,
             system: sys,
-            messages,
+            parts,
             maxOutputTokens: 32000,
-            providerOptions,
           });
-          text = await result.text;
           lastErr = null;
           break;
         } catch (e) {
           lastErr = e;
           const m = e instanceof Error ? e.message : String(e);
-          const exhausted = m.includes("402") || m.includes("429") || m.includes("401");
+          console.error(`[generateCode] key "${k.label}" failed:`, m);
+          const exhausted = m.includes("402") || m.includes("429") || m.includes("401") || m.includes("403");
           if (exhausted) await reportKeyExhausted(k, m);
-          if (!exhausted || i === keys.length - 1) throw e;
+          if (i === keys.length - 1) throw e;
         }
       }
       if (lastErr) throw lastErr;
+
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
