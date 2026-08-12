@@ -42,23 +42,13 @@ export const planWithAI = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data }) => {
     const keys = await resolveAiKeys();
-    const key = keys[0]?.api_key;
-    if (!key)
+    if (!keys.length)
       throw new Error(
         "No Gemini API key is configured. An admin must add one in the admin panel (AI API Keys).",
       );
 
-    const model = createAiModel(key, "google/gemini-2.5-flash");
-
-
-    const messages: ModelMessage[] = [];
-    for (const h of data.history ?? []) messages.push({ role: h.role, content: h.content });
-
-    const parts: Array<
-      { type: "text"; text: string } | { type: "image"; image: string }
-    > = [{ type: "text", text: data.prompt }];
+    const parts: AiPart[] = [{ type: "text", text: data.prompt }];
     for (const img of data.images ?? []) parts.push({ type: "image", image: img });
-    messages.push({ role: "user", content: parts });
 
     const memoryBlock = (data.memory ?? []).length
       ? `\n\nThings you remember about this user:\n- ${(data.memory ?? []).join("\n- ")}`
@@ -67,21 +57,26 @@ export const planWithAI = createServerFn({ method: "POST" })
       ? `\n\nThe project already has code. Plan changes on top of it, don't restart from scratch.`
       : "";
 
-    try {
-      const result = streamText({
-        model,
-        system: PLANNER_SYSTEM + memoryBlock + filesBlock,
-        messages,
-        maxOutputTokens: 4000,
-      });
-      const text = await result.text;
-      if (!text.trim()) throw new Error("Empty response from AI");
-      return { text: text.trim() };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[planWithAI]", msg);
-      if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
-      if (msg.includes("402")) throw new Error("AI credits exhausted for this workspace.");
-      throw new Error(`Planning failed: ${msg}`);
+    let lastErr: unknown = null;
+    for (const k of keys) {
+      try {
+        const text = await generateWithKey({
+          apiKey: k.api_key,
+          modelId: "google/gemini-2.5-flash",
+          system: PLANNER_SYSTEM + memoryBlock + filesBlock,
+          parts,
+          history: data.history ?? [],
+          maxOutputTokens: 4000,
+        });
+        return { text: text.trim() };
+      } catch (err) {
+        lastErr = err;
+        console.error("[planWithAI]", err instanceof Error ? err.message : String(err));
+      }
     }
+    const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
+    if (msg.includes("402")) throw new Error("AI credits exhausted for this workspace.");
+    throw new Error(`Planning failed: ${msg}`);
+
   });
