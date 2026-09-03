@@ -100,6 +100,54 @@ export type Database = {
           },
         ]
       }
+      netlify_connections: {
+        Row: {
+          access_token: string
+          account_email: string | null
+          account_name: string | null
+          account_slug: string | null
+          created_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          account_email?: string | null
+          account_name?: string | null
+          account_slug?: string | null
+          created_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          account_email?: string | null
+          account_name?: string | null
+          account_slug?: string | null
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      netlify_oauth_states: {
+        Row: {
+          created_at: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          state: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
@@ -186,6 +234,53 @@ export type Database = {
         }
         Relationships: []
       }
+      project_deploys: {
+        Row: {
+          created_at: string
+          deploy_id: string
+          error_message: string | null
+          id: string
+          kind: string
+          project_id: string
+          site_id: string
+          state: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deploy_id: string
+          error_message?: string | null
+          id?: string
+          kind?: string
+          project_id: string
+          site_id: string
+          state?: string
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deploy_id?: string
+          error_message?: string | null
+          id?: string
+          kind?: string
+          project_id?: string
+          site_id?: string
+          state?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_deploys_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_shares: {
         Row: {
           created_at: string
@@ -235,6 +330,9 @@ export type Database = {
           id: string
           is_draft: boolean
           name: string
+          netlify_site_id: string | null
+          netlify_site_name: string | null
+          netlify_url: string | null
           updated_at: string
           user_id: string
         }
@@ -245,6 +343,9 @@ export type Database = {
           id?: string
           is_draft?: boolean
           name?: string
+          netlify_site_id?: string | null
+          netlify_site_name?: string | null
+          netlify_url?: string | null
           updated_at?: string
           user_id: string
         }
@@ -255,6 +356,9 @@ export type Database = {
           id?: string
           is_draft?: boolean
           name?: string
+          netlify_site_id?: string | null
+          netlify_site_name?: string | null
+          netlify_url?: string | null
           updated_at?: string
           user_id?: string
         }
