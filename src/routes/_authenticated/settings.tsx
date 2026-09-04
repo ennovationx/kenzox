@@ -29,9 +29,7 @@ const MODELS = [
 
 function SettingsPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"account" | "ai" | "deploy">(
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("netlify") ? "deploy" : "account",
-  );
+  const [tab, setTab] = useState<"account" | "ai" | "deploy">("account");
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
