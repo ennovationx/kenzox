@@ -538,6 +538,7 @@ function Workspace() {
       toast.error(msg);
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", content: `⚠️ ${msg}` }]);
     } finally {
+      stopSteps();
       setBusy(false);
       inputRef.current?.focus();
     }
