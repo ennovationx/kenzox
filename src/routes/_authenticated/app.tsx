@@ -916,7 +916,7 @@ function Workspace() {
                             ) : (
                               <Check className="h-3 w-3 shrink-0 text-primary" />
                             )}
-                            <span className={active ? "text-foreground" : "text-muted-foreground line-through/0"}>{s}</span>
+                            <span className={active ? "text-foreground" : "text-muted-foreground"}>{s}</span>
                           </li>
                         );
                       })}
