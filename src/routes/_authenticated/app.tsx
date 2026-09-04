@@ -51,6 +51,8 @@ const DEFAULT_FILES: Files = {
   "script.js": `console.log("Kenzo ready");`,
 };
 
+const MAX_WORDS = 6000;
+
 const CONSOLE_BRIDGE = `<script>(function(){
   var send=function(level,args){try{parent.postMessage({__kenzo:1,level:level,text:Array.prototype.map.call(args,function(a){
     try{return typeof a==="object"?JSON.stringify(a):String(a)}catch(e){return String(a)}}).join(" ")},"*")}catch(e){}};
@@ -125,15 +127,22 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-/** Minimal markdown → HTML for assistant plans. */
+/** Minimal markdown → HTML for assistant plans. Never leaks raw ** or ## markers. */
 function md(text: string) {
-  const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const esc = (text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return esc
+    .replace(/```[a-z]*\n?([\s\S]*?)```/g, '<pre class="rounded-lg bg-input p-2 my-1 overflow-auto text-[11px]">$1</pre>')
     .replace(/`([^`]+)`/g, '<code class="rounded bg-input px-1 py-0.5 text-[11px]">$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/_([^_]+)_/g, "<em>$1</em>")
-    .replace(/^### (.*)$/gm, '<h4 class="font-semibold mt-2">$1</h4>')
-    .replace(/^[-*] (.*)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    .replace(/^#{4,}\s*(.*)$/gm, '<h4 class="font-semibold mt-2">$1</h4>')
+    .replace(/^###\s*(.*)$/gm, '<h4 class="font-semibold mt-2">$1</h4>')
+    .replace(/^##\s*(.*)$/gm, '<h3 class="font-semibold text-sm mt-3">$1</h3>')
+    .replace(/^#\s*(.*)$/gm, '<h3 class="font-semibold text-sm mt-3">$1</h3>')
+    .replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<em>$2</em>")
+    .replace(/^\s*\d+\.\s+(.*)$/gm, '<li class="ml-4 list-decimal">$1</li>')
+    .replace(/^\s*[-*•]\s+(.*)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    .replace(/\*+/g, "") // drop any stray asterisks the model left behind
     .replace(/\n/g, "<br/>");
 }
 
@@ -234,6 +243,8 @@ function Workspace() {
   }, []);
 
   /* ---------- boot ---------- */
+  const wordCount = useMemo(() => (input.trim() ? input.trim().split(/\s+/).length : 0), [input]);
+
   /** Only the signed-in user's own projects plus ones explicitly shared with them. */
   const loadProjects = useCallback(async (uid?: string) => {
     const me = uid ?? (await supabase.auth.getUser()).data.user?.id;
@@ -889,7 +900,16 @@ function Workspace() {
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const words = v.trim() ? v.trim().split(/\s+/) : [];
+                  if (words.length > MAX_WORDS) {
+                    setInput(words.slice(0, MAX_WORDS).join(" "));
+                    toast.error(`Prompts are limited to ${MAX_WORDS.toLocaleString()} words.`);
+                    return;
+                  }
+                  setInput(v);
+                }}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder={mode === "plan" ? "Describe the idea — Kenzo will plan it…" : "Ask Kenzo to build or change something…"}
                 rows={2}
@@ -899,6 +919,11 @@ function Workspace() {
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
             </div>
+            {input.trim() && (
+              <p className={`mt-1.5 text-right text-[11px] ${wordCount > MAX_WORDS * 0.9 ? "text-destructive" : "text-muted-foreground"}`}>
+                {wordCount.toLocaleString()} / {MAX_WORDS.toLocaleString()} words
+              </p>
+            )}
           </form>
         </section>
 
