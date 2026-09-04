@@ -472,6 +472,7 @@ function Workspace() {
     const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: prompt, mode, attachments: imgs };
     setMessages((m) => [...m, userMsg]);
     setBusy(true);
+    startSteps(mode);
     await persistMsg(projectId, userMsg);
 
     try {
