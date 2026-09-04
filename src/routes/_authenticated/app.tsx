@@ -521,6 +521,8 @@ function Workspace() {
       };
       setFiles(nextFiles);
       setLogs([]);
+      void animateCode(nextFiles);
+
       await supabase.from("projects").update({ files: nextFiles, assets: collectAssets(nextFiles) }).eq("id", projectId);
 
       if (result.name) {
