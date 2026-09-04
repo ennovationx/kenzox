@@ -179,6 +179,16 @@ export const publishProject = createServerFn({ method: "POST" })
         kind: "publish",
       });
 
+      await db.from("notifications").insert({
+        user_id: context.userId,
+        type: deploy.state === "error" ? "deploy_failed" : "deploy_success",
+        title: deploy.state === "error" ? "Deploy failed" : "Site published",
+        body:
+          deploy.state === "error"
+            ? deploy.error_message || "Netlify reported a failed deploy."
+            : `${project.name} is live at ${url}`,
+      });
+
       if (deploy.state === "error") throw new Error(deploy.error_message || "Netlify reported a failed deploy.");
 
       return { url, siteId, siteName, deployId: deploy.id, state: deploy.state };
