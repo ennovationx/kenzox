@@ -42,6 +42,10 @@ function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("netlify")) setTab("deploy");
+  }, []);
+
+  useEffect(() => {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
