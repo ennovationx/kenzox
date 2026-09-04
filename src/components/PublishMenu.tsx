@@ -18,16 +18,9 @@ function notifyBrowser(title: string, body: string) {
   } catch { /* ignore */ }
 }
 
-export function PublishMenu({
-  projectId,
-  liveUrl,
-  onPublished,
-}: {
-  projectId: string | null;
-  liveUrl: string | null;
-  onPublished: (url: string | null) => void;
-}) {
+export function PublishMenu({ projectId }: { projectId: string | null }) {
   const [open, setOpen] = useState(false);
+  const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [deploys, setDeploys] = useState<Deploy[]>([]);
@@ -41,7 +34,8 @@ export function PublishMenu({
     if (!projectId) return;
     try {
       const res = await listDeploys({ data: { projectId } });
-      setDeploys((res.deploys ?? []) as Deploy[]);
+      setDeploys((res?.deploys ?? []) as Deploy[]);
+      setLiveUrl(res?.url ?? null);
     } catch { /* ignore */ }
   }, [projectId]);
 
@@ -52,8 +46,10 @@ export function PublishMenu({
   }, []);
 
   useEffect(() => {
-    if (open) void refreshDeploys();
-  }, [open, refreshDeploys]);
+    setLiveUrl(null);
+    setDeploys([]);
+    void refreshDeploys();
+  }, [refreshDeploys]);
 
   // Debounced subdomain availability check.
   useEffect(() => {
@@ -81,9 +77,9 @@ export function PublishMenu({
     }
     try {
       const res = await publishProject({ data: { projectId } });
-      onPublished(res.url ?? null);
-      toast.success("Published", { description: res.url ?? undefined });
-      notifyBrowser("Your site is live", res.url ?? "Deploy finished");
+      setLiveUrl(res?.url ?? null);
+      toast.success("Published", { description: res?.url ?? undefined });
+      notifyBrowser("Your site is live", res?.url ?? "Deploy finished");
       setOpen(true);
       await refreshDeploys();
     } catch (e) {
@@ -102,9 +98,9 @@ export function PublishMenu({
     setBusy(true);
     try {
       const res = await renameNetlifySite({ data: { projectId, name: subdomain } });
-      onPublished(res.url ?? null);
+      setLiveUrl(res?.url ?? null);
       setEditing(false);
-      toast.success("Address updated", { description: res.url ?? undefined });
+      toast.success("Address updated", { description: res?.url ?? undefined });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the address.");
     } finally {
@@ -117,7 +113,7 @@ export function PublishMenu({
     setBusy(true);
     try {
       const res = await rollbackDeploy({ data: { projectId, deployId } });
-      onPublished(res.url ?? null);
+      setLiveUrl(res?.url ?? null);
       toast.success("Rolled back to that deploy");
       await refreshDeploys();
     } catch (e) {
@@ -132,7 +128,7 @@ export function PublishMenu({
     setBusy(true);
     try {
       await unlinkNetlifySite({ data: { projectId } });
-      onPublished(null);
+      setLiveUrl(null);
       setDeploys([]);
       toast.success("Project unlinked from Netlify");
     } catch (e) {
