@@ -158,6 +158,37 @@ function Workspace() {
   const [files, setFiles] = useState<Files>(DEFAULT_FILES);
   const [activeFile, setActiveFile] = useState<keyof Files>("index.html");
   const [rightTab, setRightTab] = useState<"code" | "preview" | "assets">("preview");
+  const [typing, setTyping] = useState<{ file: keyof Files; text: string } | null>(null);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const isTyping = typing !== null && typing.file === activeFile;
+  const editorValue: string = isTyping ? typing!.text : files[activeFile];
+
+  /** Reveal freshly generated code in the editor with a live typing effect. */
+  const animateCode = async (next: Files) => {
+    const order: (keyof Files)[] = ["index.html", "styles.css", "script.js"];
+    setRightTab("code");
+    for (const name of order) {
+      const full = next[name];
+      if (!full) continue;
+      setActiveFile(name);
+      const steps = 26;
+      const chunk = Math.max(24, Math.ceil(full.length / steps));
+      for (let i = chunk; i < full.length; i += chunk) {
+        setTyping({ file: name, text: full.slice(0, i) });
+        const el = editorRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+        await new Promise((r) => setTimeout(r, 22));
+      }
+      setTyping({ file: name, text: full });
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    setTyping(null);
+    setActiveFile("index.html");
+    setRightTab("preview");
+  };
+
+
+
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"build" | "plan">("build");
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -515,6 +546,8 @@ function Workspace() {
       };
       setFiles(nextFiles);
       setLogs([]);
+      void animateCode(nextFiles);
+
       await supabase.from("projects").update({ files: nextFiles, assets: collectAssets(nextFiles) }).eq("id", projectId);
 
       if (result.name) {
@@ -1114,11 +1147,13 @@ function Workspace() {
                 </div>
                 <div className="flex-1 min-h-0 flex bg-surface overflow-hidden">
                   <div aria-hidden ref={gutterRef} className="hidden sm:block select-none overflow-hidden border-r border-glass-border px-3 py-4 text-right font-mono text-xs leading-relaxed text-muted-foreground/60">
-                    {files[activeFile].split("\n").map((_, i) => <div key={i}>{i + 1}</div>)}
+                    {editorValue.split("\n").map((_, i) => <div key={i}>{i + 1}</div>)}
                   </div>
                   <textarea
                     key={activeFile}
-                    value={files[activeFile]}
+                    ref={editorRef}
+                    readOnly={isTyping}
+                    value={editorValue}
                     onChange={(e) => updateFile(activeFile, e.target.value)}
                     onScroll={(e) => { if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop; }}
                     onKeyDown={(e) => {
@@ -1131,10 +1166,11 @@ function Workspace() {
                       }
                     }}
                     spellCheck={false}
-                    className="flex-1 w-full resize-none bg-transparent font-mono text-xs px-4 py-4 outline-none border-0 leading-relaxed"
+                    className={`flex-1 w-full resize-none bg-transparent font-mono text-xs px-4 py-4 outline-none border-0 leading-relaxed ${isTyping ? "caret-primary" : ""}`}
                     style={{ tabSize: 2 }}
                   />
                 </div>
+
               </div>
             )}
 
