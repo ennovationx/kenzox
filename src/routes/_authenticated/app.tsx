@@ -161,6 +161,8 @@ function Workspace() {
   const [typing, setTyping] = useState<{ file: keyof Files; text: string } | null>(null);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const isTyping = typing !== null && typing.file === activeFile;
+  const editorValue: string = isTyping ? typing!.text : files[activeFile];
+
 
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"build" | "plan">("build");
