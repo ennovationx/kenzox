@@ -243,6 +243,8 @@ function Workspace() {
   }, []);
 
   /* ---------- boot ---------- */
+  const wordCount = useMemo(() => (input.trim() ? input.trim().split(/\s+/).length : 0), [input]);
+
   /** Only the signed-in user's own projects plus ones explicitly shared with them. */
   const loadProjects = useCallback(async (uid?: string) => {
     const me = uid ?? (await supabase.auth.getUser()).data.user?.id;
