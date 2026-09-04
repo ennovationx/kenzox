@@ -180,6 +180,11 @@ function Workspace() {
   const [collabs, setCollabs] = useState<Array<{ id: string; email: string; role: string; status: string; display_name: string | null; avatar_url: string | null }>>([]);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [steps, setSteps] = useState<string[]>([]);
+  const [thinkOpen, setThinkOpen] = useState(true);
+  const [elapsed, setElapsed] = useState(0);
+  const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const splitRef = useRef<HTMLElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
@@ -405,7 +410,47 @@ function Workspace() {
     });
   }
 
+  const BUILD_STEPS = [
+    "Reading your request",
+    "Reviewing the current files",
+    "Designing the layout & styles",
+    "Writing HTML, CSS and JavaScript",
+    "Polishing details and responsiveness",
+    "Finishing up",
+  ];
+  const PLAN_STEPS = [
+    "Reading your request",
+    "Exploring approaches",
+    "Shaping the sections",
+    "Choosing palette & typography",
+    "Writing the plan",
+  ];
+
+  function startSteps(kind: "build" | "plan") {
+    const list = kind === "plan" ? PLAN_STEPS : BUILD_STEPS;
+    setSteps([list[0]!]);
+    setElapsed(0);
+    setThinkOpen(true);
+    let i = 1;
+    stepTimer.current = setInterval(() => {
+      if (i >= list.length) return;
+      const next = list[i++]!;
+      setSteps((s) => [...s, next]);
+    }, 4500);
+    tickTimer.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+  }
+
+  function stopSteps() {
+    if (stepTimer.current) clearInterval(stepTimer.current);
+    if (tickTimer.current) clearInterval(tickTimer.current);
+    stepTimer.current = null;
+    tickTimer.current = null;
+  }
+
+  useEffect(() => () => stopSteps(), []);
+
   async function run(prompt: string, imgs: string[], history: Msg[]) {
+
     if (!user) return;
 
     // Materialise a draft project on the first real prompt.
@@ -427,6 +472,7 @@ function Workspace() {
     const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: prompt, mode, attachments: imgs };
     setMessages((m) => [...m, userMsg]);
     setBusy(true);
+    startSteps(mode);
     await persistMsg(projectId, userMsg);
 
     try {
@@ -492,6 +538,7 @@ function Workspace() {
       toast.error(msg);
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", content: `⚠️ ${msg}` }]);
     } finally {
+      stopSteps();
       setBusy(false);
       inputRef.current?.focus();
     }
@@ -840,14 +887,45 @@ function Workspace() {
 
             {busy && (
               <div className="animate-fade-in-up">
-                <div className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm glass">
-                  <span className="thinking-dot" />
-                  <span className="thinking-dot" style={{ animationDelay: "150ms" }} />
-                  <span className="thinking-dot" style={{ animationDelay: "300ms" }} />
-                  <span className="text-muted-foreground ml-1">{mode === "plan" ? "Kenzo is planning…" : "Kenzo is building…"}</span>
+                <div className="rounded-2xl glass overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setThinkOpen((v) => !v)}
+                    aria-expanded={thinkOpen}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-left transition hover:bg-surface/50"
+                  >
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" style={{ animationDelay: "150ms" }} />
+                    <span className="thinking-dot" style={{ animationDelay: "300ms" }} />
+                    <span className="ml-1 text-muted-foreground">
+                      {mode === "plan" ? "Kenzo is planning…" : "Kenzo is building…"}
+                    </span>
+                    <span className="ml-auto tabular-nums text-[11px] text-muted-foreground">
+                      {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
+                    </span>
+                    <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${thinkOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {thinkOpen && (
+                    <ul className="space-y-1.5 border-t border-glass-border px-4 py-3 text-[12px]">
+                      {steps.map((s, i) => {
+                        const active = i === steps.length - 1;
+                        return (
+                          <li key={s} className="flex items-center gap-2 animate-fade-in-up">
+                            {active ? (
+                              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
+                            ) : (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                            <span className={active ? "text-foreground" : "text-muted-foreground"}>{s}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               </div>
             )}
+
             <div ref={chatEndRef} />
           </div>
 
