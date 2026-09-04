@@ -410,7 +410,47 @@ function Workspace() {
     });
   }
 
+  const BUILD_STEPS = [
+    "Reading your request",
+    "Reviewing the current files",
+    "Designing the layout & styles",
+    "Writing HTML, CSS and JavaScript",
+    "Polishing details and responsiveness",
+    "Finishing up",
+  ];
+  const PLAN_STEPS = [
+    "Reading your request",
+    "Exploring approaches",
+    "Shaping the sections",
+    "Choosing palette & typography",
+    "Writing the plan",
+  ];
+
+  function startSteps(kind: "build" | "plan") {
+    const list = kind === "plan" ? PLAN_STEPS : BUILD_STEPS;
+    setSteps([list[0]!]);
+    setElapsed(0);
+    setThinkOpen(true);
+    let i = 1;
+    stepTimer.current = setInterval(() => {
+      if (i >= list.length) return;
+      const next = list[i++]!;
+      setSteps((s) => [...s, next]);
+    }, 4500);
+    tickTimer.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+  }
+
+  function stopSteps() {
+    if (stepTimer.current) clearInterval(stepTimer.current);
+    if (tickTimer.current) clearInterval(tickTimer.current);
+    stepTimer.current = null;
+    tickTimer.current = null;
+  }
+
+  useEffect(() => () => stopSteps(), []);
+
   async function run(prompt: string, imgs: string[], history: Msg[]) {
+
     if (!user) return;
 
     // Materialise a draft project on the first real prompt.
