@@ -887,14 +887,45 @@ function Workspace() {
 
             {busy && (
               <div className="animate-fade-in-up">
-                <div className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm glass">
-                  <span className="thinking-dot" />
-                  <span className="thinking-dot" style={{ animationDelay: "150ms" }} />
-                  <span className="thinking-dot" style={{ animationDelay: "300ms" }} />
-                  <span className="text-muted-foreground ml-1">{mode === "plan" ? "Kenzo is planning…" : "Kenzo is building…"}</span>
+                <div className="rounded-2xl glass overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setThinkOpen((v) => !v)}
+                    aria-expanded={thinkOpen}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-left transition hover:bg-surface/50"
+                  >
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" style={{ animationDelay: "150ms" }} />
+                    <span className="thinking-dot" style={{ animationDelay: "300ms" }} />
+                    <span className="ml-1 text-muted-foreground">
+                      {mode === "plan" ? "Kenzo is planning…" : "Kenzo is building…"}
+                    </span>
+                    <span className="ml-auto tabular-nums text-[11px] text-muted-foreground">
+                      {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
+                    </span>
+                    <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${thinkOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {thinkOpen && (
+                    <ul className="space-y-1.5 border-t border-glass-border px-4 py-3 text-[12px]">
+                      {steps.map((s, i) => {
+                        const active = i === steps.length - 1;
+                        return (
+                          <li key={s} className="flex items-center gap-2 animate-fade-in-up">
+                            {active ? (
+                              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
+                            ) : (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                            <span className={active ? "text-foreground" : "text-muted-foreground line-through/0"}>{s}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               </div>
             )}
+
             <div ref={chatEndRef} />
           </div>
 
