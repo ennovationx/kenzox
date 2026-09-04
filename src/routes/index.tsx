@@ -31,7 +31,7 @@ function Landing() {
 
       <section className="mx-auto max-w-5xl px-6 pt-24 pb-16 text-center animate-fade-in-up">
         <span className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-xs font-medium text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-primary" /> AI web builder — powered by GPT-5.4
+          <Sparkles className="h-3.5 w-3.5 text-primary" /> Prompt to production, instantly
         </span>
         <h1 className="mt-6 text-5xl md:text-7xl font-bold tracking-tight leading-[1.05]">
           Build web apps by <span className="text-gradient">chatting</span> with AI.
