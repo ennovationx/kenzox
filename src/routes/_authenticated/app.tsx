@@ -180,6 +180,11 @@ function Workspace() {
   const [collabs, setCollabs] = useState<Array<{ id: string; email: string; role: string; status: string; display_name: string | null; avatar_url: string | null }>>([]);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [steps, setSteps] = useState<string[]>([]);
+  const [thinkOpen, setThinkOpen] = useState(true);
+  const [elapsed, setElapsed] = useState(0);
+  const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const splitRef = useRef<HTMLElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
