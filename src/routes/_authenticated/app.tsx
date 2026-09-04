@@ -1114,11 +1114,13 @@ function Workspace() {
                 </div>
                 <div className="flex-1 min-h-0 flex bg-surface overflow-hidden">
                   <div aria-hidden ref={gutterRef} className="hidden sm:block select-none overflow-hidden border-r border-glass-border px-3 py-4 text-right font-mono text-xs leading-relaxed text-muted-foreground/60">
-                    {files[activeFile].split("\n").map((_, i) => <div key={i}>{i + 1}</div>)}
+                    {editorValue.split("\n").map((_, i) => <div key={i}>{i + 1}</div>)}
                   </div>
                   <textarea
                     key={activeFile}
-                    value={files[activeFile]}
+                    ref={editorRef}
+                    readOnly={isTyping}
+                    value={editorValue}
                     onChange={(e) => updateFile(activeFile, e.target.value)}
                     onScroll={(e) => { if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop; }}
                     onKeyDown={(e) => {
@@ -1131,10 +1133,11 @@ function Workspace() {
                       }
                     }}
                     spellCheck={false}
-                    className="flex-1 w-full resize-none bg-transparent font-mono text-xs px-4 py-4 outline-none border-0 leading-relaxed"
+                    className={`flex-1 w-full resize-none bg-transparent font-mono text-xs px-4 py-4 outline-none border-0 leading-relaxed ${isTyping ? "caret-primary" : ""}`}
                     style={{ tabSize: 2 }}
                   />
                 </div>
+
               </div>
             )}
 
