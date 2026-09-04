@@ -158,6 +158,10 @@ function Workspace() {
   const [files, setFiles] = useState<Files>(DEFAULT_FILES);
   const [activeFile, setActiveFile] = useState<keyof Files>("index.html");
   const [rightTab, setRightTab] = useState<"code" | "preview" | "assets">("preview");
+  const [typing, setTyping] = useState<{ file: keyof Files; text: string } | null>(null);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const isTyping = typing !== null && typing.file === activeFile;
+
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"build" | "plan">("build");
   const [attachments, setAttachments] = useState<string[]>([]);
