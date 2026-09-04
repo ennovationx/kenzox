@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
 import { setTheme, getStoredTheme, type Theme } from "@/lib/theme";
-import { ArrowLeft, User, Sparkles, Monitor, Moon, Sun } from "lucide-react";
+import { ArrowLeft, User, Sparkles, Monitor, Moon, Sun, Rocket } from "lucide-react";
+import { NetlifyPanel } from "@/components/NetlifyPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -28,7 +29,9 @@ const MODELS = [
 
 function SettingsPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"account" | "ai">("account");
+  const [tab, setTab] = useState<"account" | "ai" | "deploy">(
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("netlify") ? "deploy" : "account",
+  );
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -124,10 +127,15 @@ function SettingsPage() {
           <button onClick={() => setTab("ai")} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition ${tab === "ai" ? "gradient-brand text-primary-foreground" : "hover:bg-surface"}`}>
             <Sparkles className="h-4 w-4" /> AI customization
           </button>
+          <button onClick={() => setTab("deploy")} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition ${tab === "deploy" ? "gradient-brand text-primary-foreground" : "hover:bg-surface"}`}>
+            <Rocket className="h-4 w-4" /> Deployments
+          </button>
         </nav>
 
         <div className="glass rounded-2xl p-6 animate-fade-in-up">
-          {tab === "account" ? (
+          {tab === "deploy" ? (
+            <NetlifyPanel />
+          ) : tab === "account" ? (
             <div className="space-y-6">
               <div>
                 <h2 className="text-xl font-semibold">Account</h2>
