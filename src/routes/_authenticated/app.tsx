@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Avatars, ShareDialog } from "@/components/ShareDialog";
+import { PublishMenu } from "@/components/PublishMenu";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { generateCode } from "@/lib/generate.functions";
@@ -925,6 +926,7 @@ function Workspace() {
                 ))}
               </div>
               <div className="flex items-center gap-1">
+                <PublishMenu projectId={activeId} />
                 {rightTab === "preview" && (
                   <div className="hidden md:flex gap-1 rounded-lg bg-input p-1 mr-1">
                     {([["desktop", Monitor, "Desktop"], ["tablet", Tablet, "Tablet"], ["mobile", Smartphone, "Mobile"]] as const).map(([key, Icon, label]) => (
