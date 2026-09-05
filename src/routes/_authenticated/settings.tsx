@@ -247,9 +247,13 @@ function SelectField({ label, value, onChange, options }: { label: string; value
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg bg-input border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+        className="mt-1 w-full rounded-lg bg-input text-foreground border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
       >
-        {options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+        {options.map((o) => (
+          <option key={o.v} value={o.v} className="bg-background text-foreground">
+            {o.l}
+          </option>
+        ))}
       </select>
     </label>
   );
