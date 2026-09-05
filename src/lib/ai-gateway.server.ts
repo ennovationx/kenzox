@@ -82,7 +82,6 @@ export async function generateWithKey(opts: {
   const max = opts.maxOutputTokens ?? 32000;
 
   if (isGeminiApiKey(key)) {
-    const model = googleModelId(opts.modelId);
     const contents = [
       ...(opts.history ?? []).map((h) => ({
         role: h.role === "assistant" ? "model" : "user",
@@ -90,43 +89,67 @@ export async function generateWithKey(opts: {
       })),
       { role: "user", parts: toGeminiParts(opts.parts) },
     ];
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: opts.system }] },
-          contents,
-          generationConfig: { maxOutputTokens: max, temperature: 0.8 },
-        }),
-      },
-    );
-    const raw = await res.text();
-    if (!res.ok) {
-      let detail = raw.slice(0, 300);
-      try {
-        detail = JSON.parse(raw)?.error?.message ?? detail;
-      } catch {
-        /* keep raw */
+
+    const call = async (model: string) => {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: opts.system }] },
+            contents,
+            generationConfig: { maxOutputTokens: max, temperature: 0.8 },
+          }),
+        },
+      );
+      const raw = await res.text();
+      if (!res.ok) {
+        let detail = raw.slice(0, 300);
+        try {
+          detail = JSON.parse(raw)?.error?.message ?? detail;
+        } catch {
+          /* keep raw */
+        }
+        const err = new Error(`${res.status} ${detail}`);
+        (err as any).status = res.status;
+        throw err;
       }
-      throw new Error(`${res.status} ${detail}`);
-    }
-    let json: any;
+      let json: any;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        throw new Error("Malformed response from Gemini");
+      }
+      const cand = json?.candidates?.[0];
+      const text: string = (cand?.content?.parts ?? []).map((p: any) => p?.text ?? "").join("");
+      if (!text.trim()) {
+        const reason = cand?.finishReason ?? json?.promptFeedback?.blockReason ?? "unknown";
+        throw new Error(`Gemini returned no text (finishReason: ${reason})`);
+      }
+      return text;
+    };
+
+    const first = googleModelId(opts.modelId);
     try {
-      json = JSON.parse(raw);
-    } catch {
-      throw new Error("Malformed response from Gemini");
+      return await call(first);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Retired / unavailable model → retry once with Google's own suggestion,
+      // then with the always-available flash alias.
+      if (msg.startsWith("404")) {
+        const next = suggestedModel(msg);
+        for (const alt of [next, "gemini-flash-latest"]) {
+          if (!alt || alt === first) continue;
+          try {
+            return await call(alt);
+          } catch {
+            /* try the next candidate */
+          }
+        }
+      }
+      throw e;
     }
-    const cand = json?.candidates?.[0];
-    const text: string = (cand?.content?.parts ?? [])
-      .map((p: any) => p?.text ?? "")
-      .join("");
-    if (!text.trim()) {
-      const reason = cand?.finishReason ?? json?.promptFeedback?.blockReason ?? "unknown";
-      throw new Error(`Gemini returned no text (finishReason: ${reason})`);
-    }
-    return text;
   }
 
   // Lovable AI Gateway path
