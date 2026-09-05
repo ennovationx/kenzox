@@ -70,11 +70,13 @@ const Input = z.object({
 });
 
 const ALLOWED_MODELS = new Set([
+  "google/gemini-3.1-pro-preview",
+  "google/gemini-3.7-flash",
   "google/gemini-3.6-flash",
-  "google/gemini-3.5-flash",
+  "google/gemini-3.1-flash-lite",
   "google/gemini-2.5-flash",
   "google/gemini-2.5-flash-lite",
-  "google/gemini-2.5-pro",
+  "google/gemini-flash-latest",
 ]);
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
