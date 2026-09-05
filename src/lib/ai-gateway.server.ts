@@ -20,18 +20,36 @@ export function createLovableAiGatewayProvider(lovableApiKey: string) {
 
 /** Model ids Google's own API accepts. Anything else falls back to a safe default. */
 const GOOGLE_MODELS = new Set([
+  "gemini-3.1-pro-preview",
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-3.1-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
-  "gemini-2.5-pro",
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
   "gemini-flash-latest",
   "gemini-flash-lite-latest",
 ]);
 
+/** Models Google retired for new keys → their current replacement. */
+const RETIRED: Record<string, string> = {
+  "gemini-2.5-pro": "gemini-3.1-pro-preview",
+  "gemini-1.5-flash": "gemini-flash-latest",
+  "gemini-1.5-pro": "gemini-3.1-pro-preview",
+  "gemini-3.5-flash": "gemini-flash-latest",
+};
+
 export function googleModelId(modelId: string) {
-  const id = modelId.replace(/^google\//, "");
-  return GOOGLE_MODELS.has(id) ? id : "gemini-2.5-flash-lite";
+  const raw = modelId.replace(/^google\//, "");
+  const id = RETIRED[raw] ?? raw;
+  return GOOGLE_MODELS.has(id) ? id : "gemini-flash-latest";
+}
+
+/** Google 404s name their replacement — pull it out so we can retry once. */
+function suggestedModel(message: string) {
+  const m = message.match(/use\s+models\/([a-z0-9.\-]+)/i);
+  return m ? m[1] : null;
 }
 
 export type AiPart = { type: "text"; text: string } | { type: "image"; image: string };
