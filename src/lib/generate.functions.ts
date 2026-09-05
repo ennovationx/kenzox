@@ -49,6 +49,15 @@ QUALITY BAR
 - Distinctive, polished visual design — never a plain unstyled document.
 - Real, plausible content instead of lorem ipsum.
 - No external network calls except Google Fonts, which is allowed via a <link> in the head.
+
+ICONS — MANDATORY
+- Every icon in the app MUST be a Google Material Symbol. Never use emoji, inline SVG icon sets, Font Awesome, or any other icon library.
+- Load them in <head> with: <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+- Use them as: <span class="material-symbols-rounded" aria-hidden="true">search</span> and give icon-only buttons an aria-label.
+- In styles.css set: .material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; line-height: 1; user-select: none; } and size icons with font-size.
+
+IMAGES
+- Use real, working image URLs (e.g. https://images.unsplash.com/photo-...?w=1200&q=80) that match the content. Never use placeholder greys, broken paths, or made-up file names. Always set width/height or aspect-ratio, loading="lazy" and descriptive alt text.
 - Keep the code clean, commented where non-obvious, and free of dead code.
 `;
 
