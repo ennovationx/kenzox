@@ -22,9 +22,11 @@ export const Route = createFileRoute("/_authenticated/settings")({
 const MODELS = [
   { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite — Recommended (fastest)" },
   { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash — Balanced" },
+  { id: "google/gemini-flash-latest", label: "Gemini Flash (latest) — Always up to date" },
+  { id: "google/gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite — Fast, newest generation" },
   { id: "google/gemini-3.6-flash", label: "Gemini 3.6 Flash — Best code quality" },
-  { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash — Rich, detailed builds" },
-  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro — Deepest reasoning" },
+  { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash — Newest coding model" },
+  { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro — Deepest reasoning" },
 ];
 
 function SettingsPage() {
@@ -245,9 +247,13 @@ function SelectField({ label, value, onChange, options }: { label: string; value
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg bg-input border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+        className="mt-1 w-full rounded-lg bg-input text-foreground border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
       >
-        {options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+        {options.map((o) => (
+          <option key={o.v} value={o.v} className="bg-background text-foreground">
+            {o.l}
+          </option>
+        ))}
       </select>
     </label>
   );

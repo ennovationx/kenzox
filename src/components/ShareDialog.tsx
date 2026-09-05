@@ -137,8 +137,8 @@ export function ShareDialog({
               onChange={(e) => setRole(e.target.value as "viewer" | "editor")}
               className="rounded-lg bg-input border border-border px-3 py-2 text-sm outline-none focus:border-primary"
             >
-              <option value="viewer">Can view</option>
-              <option value="editor">Can edit</option>
+              <option className="bg-background text-foreground" value="viewer">Can view</option>
+              <option className="bg-background text-foreground" value="editor">Can edit</option>
             </select>
             <button
               type="submit"
@@ -177,8 +177,8 @@ export function ShareDialog({
                     }}
                     className="rounded-md bg-input border border-border px-2 py-1 text-xs outline-none"
                   >
-                    <option value="viewer">Can view</option>
-                    <option value="editor">Can edit</option>
+                    <option className="bg-background text-foreground" value="viewer">Can view</option>
+                    <option className="bg-background text-foreground" value="editor">Can edit</option>
                   </select>
                   <button
                     onClick={async () => {
