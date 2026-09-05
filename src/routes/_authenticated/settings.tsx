@@ -22,9 +22,11 @@ export const Route = createFileRoute("/_authenticated/settings")({
 const MODELS = [
   { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite — Recommended (fastest)" },
   { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash — Balanced" },
+  { id: "google/gemini-flash-latest", label: "Gemini Flash (latest) — Always up to date" },
+  { id: "google/gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite — Fast, newest generation" },
   { id: "google/gemini-3.6-flash", label: "Gemini 3.6 Flash — Best code quality" },
-  { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash — Rich, detailed builds" },
-  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro — Deepest reasoning" },
+  { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash — Newest coding model" },
+  { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro — Deepest reasoning" },
 ];
 
 function SettingsPage() {
