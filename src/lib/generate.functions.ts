@@ -207,7 +207,7 @@ export const generateCode = createServerFn({ method: "POST" })
       );
 
 
-    const modelId = data.model && ALLOWED_MODELS.has(data.model) ? data.model : DEFAULT_MODEL;
+    const chain = modelChain(data.model ?? DEFAULT_MODEL);
 
     const personality = data.personality ?? "balanced";
     const verbosity = data.verbosity ?? "normal";
