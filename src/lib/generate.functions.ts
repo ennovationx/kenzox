@@ -56,9 +56,18 @@ ICONS — MANDATORY
 - Use them as: <span class="material-symbols-rounded" aria-hidden="true">search</span> and give icon-only buttons an aria-label.
 - In styles.css set: .material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; line-height: 1; user-select: none; } and size icons with font-size.
 
-IMAGES
-- Use real, working image URLs (e.g. https://images.unsplash.com/photo-...?w=1200&q=80) that match the content. Never use placeholder greys, broken paths, or made-up file names. Always set width/height or aspect-ratio, loading="lazy" and descriptive alt text.
+IMAGES — MANDATORY, MUST ACTUALLY LOAD
+- Every page must contain real photography wherever content implies it (hero, cards, gallery, avatars, backgrounds). Never ship an image-free page and never use grey placeholder boxes or invented file names.
+- Use ONLY these always-working sources:
+  • https://picsum.photos/seed/<unique-keyword>/1200/800 (deterministic photo per seed — safest default)
+  • https://images.unsplash.com/photo-<id>?w=1200&q=80 only when you are certain the photo id exists
+  • https://ui-avatars.com/api/?name=Jane+Doe&size=128&background=random for people avatars
+- Give every <img> width/height or aspect-ratio, loading="lazy", descriptive alt text, and onerror="this.src='https://picsum.photos/seed/fallback/1200/800'" so nothing ever renders broken.
+
+SCROLL EXPERIENCE
+- Add a slim fixed scroll-progress bar at the very top of the page (a div filled from script.js on scroll), plus smooth scrolling, scroll-reveal via IntersectionObserver, and a sticky header that condenses on scroll. Keep it subtle and professional, and disable motion under prefers-reduced-motion.
 - Keep the code clean, commented where non-obvious, and free of dead code.
+
 `;
 
 const Input = z.object({
