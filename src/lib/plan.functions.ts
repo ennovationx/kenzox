@@ -57,23 +57,32 @@ export const planWithAI = createServerFn({ method: "POST" })
       ? `\n\nThe project already has code. Plan changes on top of it, don't restart from scratch.`
       : "";
 
+    const PLAN_CHAIN = [
+      "google/gemini-2.5-flash",
+      "google/gemini-flash-latest",
+      "google/gemini-2.5-flash-lite",
+    ];
+
     let lastErr: unknown = null;
-    for (const k of keys) {
-      try {
-        const text = await generateWithKey({
-          apiKey: k.api_key,
-          modelId: "google/gemini-2.5-flash",
-          system: PLANNER_SYSTEM + memoryBlock + filesBlock,
-          parts,
-          history: data.history ?? [],
-          maxOutputTokens: 4000,
-        });
-        return { text: text.trim() };
-      } catch (err) {
-        lastErr = err;
-        console.error("[planWithAI]", err instanceof Error ? err.message : String(err));
+    for (const modelId of PLAN_CHAIN) {
+      for (const k of keys) {
+        try {
+          const text = await generateWithKey({
+            apiKey: k.api_key,
+            modelId,
+            system: PLANNER_SYSTEM + memoryBlock + filesBlock,
+            parts,
+            history: data.history ?? [],
+            maxOutputTokens: 4000,
+          });
+          return { text: text.trim() };
+        } catch (err) {
+          lastErr = err;
+          console.error("[planWithAI]", modelId, err instanceof Error ? err.message : String(err));
+        }
       }
     }
+
     const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
     if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
     if (msg.includes("402")) throw new Error("AI credits exhausted for this workspace.");
