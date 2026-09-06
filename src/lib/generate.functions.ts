@@ -79,6 +79,7 @@ const Input = z.object({
 });
 
 const ALLOWED_MODELS = new Set([
+  "auto",
   "google/gemini-3.1-pro-preview",
   "google/gemini-3.7-flash",
   "google/gemini-3.6-flash",
@@ -88,7 +89,22 @@ const ALLOWED_MODELS = new Set([
   "google/gemini-flash-latest",
 ]);
 
-const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
+/** Auto mode: strongest coder first, then progressively cheaper/always-available ones. */
+const AUTO_CHAIN = [
+  "google/gemini-3.6-flash",
+  "google/gemini-2.5-flash",
+  "google/gemini-flash-latest",
+  "google/gemini-2.5-flash-lite",
+];
+
+const DEFAULT_MODEL = "auto";
+
+/** Model ids to try, in order, for the requested setting. */
+function modelChain(requested?: string) {
+  if (!requested || requested === "auto" || !ALLOWED_MODELS.has(requested)) return AUTO_CHAIN;
+  return [requested, ...AUTO_CHAIN.filter((m) => m !== requested)];
+}
+
 
 type Result = { html: string; css: string; js: string; summary: string; name?: string; memory: string[] };
 
