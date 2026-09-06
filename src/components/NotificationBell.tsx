@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Bell, Check, Inbox } from "lucide-react";
+import { Bell, Check, Inbox, X } from "lucide-react";
 
 type Notif = {
   id: string;
@@ -22,9 +22,11 @@ function timeAgo(iso: string) {
 export function NotificationBell({ userId }: { userId: string | null }) {
   const [items, setItems] = useState<Notif[]>([]);
   const [open, setOpen] = useState(false);
-  const popRef = useRef<HTMLDivElement | null>(null);
+  /** Ids already marked read in this session — never counted again, even if a
+   *  realtime refresh briefly returns a stale row. */
+  const seen = useRef<Set<string>>(new Set());
 
-  const unread = items.filter((n) => !n.read).length;
+  const unread = items.filter((n) => !n.read && !seen.current.has(n.id)).length;
 
   async function load() {
     const { data } = await supabase
@@ -32,7 +34,10 @@ export function NotificationBell({ userId }: { userId: string | null }) {
       .select("id, type, title, body, read, created_at")
       .order("created_at", { ascending: false })
       .limit(30);
-    setItems((data ?? []) as Notif[]);
+    const rows = ((data ?? []) as Notif[]).map((n) =>
+      seen.current.has(n.id) ? { ...n, read: true } : n,
+    );
+    setItems(rows);
   }
 
   useEffect(() => {
@@ -51,28 +56,28 @@ export function NotificationBell({ userId }: { userId: string | null }) {
     };
   }, [userId]);
 
-  // Mark visible items read shortly after the panel is opened.
-  useEffect(() => {
-    if (!open || unread === 0) return;
-    const ids = items.filter((n) => !n.read).map((n) => n.id);
-    const t = setTimeout(async () => {
-      await supabase.from("notifications").update({ read: true }).in("id", ids);
-      setItems((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)));
-    }, 900);
-    return () => clearTimeout(t);
-  }, [open, unread, items]);
+  /** Opening the panel marks everything in it read, once and for good. */
+  async function markAll(ids?: string[]) {
+    const list = ids ?? items.filter((n) => !n.read).map((n) => n.id);
+    if (!list.length) return;
+    list.forEach((id) => seen.current.add(id));
+    setItems((prev) => prev.map((n) => (list.includes(n.id) ? { ...n, read: true } : n)));
+    await supabase.from("notifications").update({ read: true }).in("id", list);
+  }
 
-  async function markAll() {
-    const ids = items.filter((n) => !n.read).map((n) => n.id);
-    if (!ids.length) return;
-    await supabase.from("notifications").update({ read: true }).in("id", ids);
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      const ids = items.filter((n) => !n.read).map((n) => n.id);
+      if (ids.length) void markAll(ids);
+    }
   }
 
   return (
-    <div className="relative" ref={popRef}>
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-label={unread ? `${unread} unread notifications` : "Notifications"}
         className="relative p-2 rounded-lg hover:bg-surface transition active:scale-95"
       >
@@ -85,18 +90,23 @@ export function NotificationBell({ userId }: { userId: string | null }) {
       </button>
 
       {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 z-50 rounded-2xl glass-strong border border-glass-border shadow-lift overflow-hidden animate-fade-in-up">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
+        <div className="fixed inset-0 z-[200]" role="dialog" aria-label="Notifications">
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+          <div className="absolute right-3 top-16 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl glass-strong border border-glass-border shadow-lift overflow-hidden animate-fade-in-up">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border bg-background/80">
               <span className="text-sm font-semibold">Notifications</span>
-              {unread > 0 && (
-                <button onClick={markAll} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                  <Check className="h-3 w-3" /> Mark all read
+              <div className="flex items-center gap-1">
+                {items.some((n) => !n.read) && (
+                  <button onClick={() => markAll()} className="inline-flex items-center gap-1 text-xs text-primary hover:underline px-2 py-1">
+                    <Check className="h-3 w-3" /> Mark all read
+                  </button>
+                )}
+                <button onClick={() => setOpen(false)} aria-label="Close notifications" className="p-1.5 rounded-lg hover:bg-surface transition">
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              )}
+              </div>
             </div>
-            <div className="max-h-96 overflow-auto">
+            <div className="max-h-[70vh] overflow-auto bg-background/80">
               {items.length === 0 && (
                 <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                   <Inbox className="h-5 w-5 mx-auto mb-2 opacity-60" />
@@ -111,8 +121,8 @@ export function NotificationBell({ userId }: { userId: string | null }) {
                   <div className="flex items-start gap-2">
                     {!n.read && <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
                     <div className="min-w-0">
-                      <p className="text-sm font-medium leading-snug">{n.title}</p>
-                      {n.body && <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>}
+                      <p className="text-sm font-medium leading-snug text-foreground break-words">{n.title}</p>
+                      {n.body && <p className="text-xs text-muted-foreground mt-0.5 break-words">{n.body}</p>}
                       <p className="text-[11px] text-muted-foreground mt-1">{timeAgo(n.created_at)}</p>
                     </div>
                   </div>
@@ -120,8 +130,8 @@ export function NotificationBell({ userId }: { userId: string | null }) {
               ))}
             </div>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }
