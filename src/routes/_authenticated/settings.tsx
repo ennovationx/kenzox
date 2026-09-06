@@ -20,7 +20,8 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 const MODELS = [
-  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite — Recommended (fastest)" },
+  { id: "auto", label: "Auto — Kenzo picks the best model (recommended)" },
+  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite — Fastest" },
   { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash — Balanced" },
   { id: "google/gemini-flash-latest", label: "Gemini Flash (latest) — Always up to date" },
   { id: "google/gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite — Fast, newest generation" },
@@ -38,7 +39,7 @@ function SettingsPage() {
   const [personality, setPersonality] = useState("balanced");
   const [verbosity, setVerbosity] = useState("normal");
   const [style, setStyle] = useState("modern");
-  const [model, setModel] = useState("google/gemini-2.5-flash-lite");
+  const [model, setModel] = useState("auto");
   const [password, setPassword] = useState("");
   const [theme, setThemeState] = useState<Theme>(getStoredTheme());
   const [saving, setSaving] = useState(false);
@@ -109,7 +110,7 @@ function SettingsPage() {
     setPersonality("balanced");
     setVerbosity("normal");
     setStyle("modern");
-    setModel("google/gemini-2.5-flash-lite");
+    setModel("auto");
   }
 
   return (
