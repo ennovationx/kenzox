@@ -257,32 +257,34 @@ ${CONTRACT}`
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.${memBlock}`;
 
     try {
-      // Try each configured key in priority order; fall back when one fails,
-      // and tell the admins when a key is rate-limited or out of credits.
+      // Auto mode: walk the model chain, and inside it every configured key.
+      // A model that is unavailable, overloaded or rejects the request simply
+      // hands over to the next one, so a build never dies on one bad choice.
       let text = "";
       let lastErr: unknown = null;
-      for (let i = 0; i < keys.length; i++) {
-        const k = keys[i]!;
-        try {
-          text = await generateWithKey({
-            apiKey: k.api_key,
-            modelId,
-            system: sys,
-            parts,
-            maxOutputTokens: 32000,
-          });
-          lastErr = null;
-          break;
-        } catch (e) {
-          lastErr = e;
-          const m = e instanceof Error ? e.message : String(e);
-          console.error(`[generateCode] key "${k.label}" failed:`, m);
-          const exhausted = m.includes("402") || m.includes("429") || m.includes("401") || m.includes("403");
-          if (exhausted) await reportKeyExhausted(k, m);
-          if (i === keys.length - 1) throw e;
+      outer: for (const modelId of chain) {
+        for (const k of keys) {
+          try {
+            text = await generateWithKey({
+              apiKey: k.api_key,
+              modelId,
+              system: sys,
+              parts,
+              maxOutputTokens: 32000,
+            });
+            lastErr = null;
+            break outer;
+          } catch (e) {
+            lastErr = e;
+            const m = e instanceof Error ? e.message : String(e);
+            console.error(`[generateCode] ${modelId} / key "${k.label}" failed:`, m);
+            const exhausted = m.includes("402") || m.includes("429") || m.includes("401") || m.includes("403");
+            if (exhausted) await reportKeyExhausted(k, m);
+          }
         }
       }
       if (lastErr) throw lastErr;
+
 
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
