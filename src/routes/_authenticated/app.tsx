@@ -830,25 +830,30 @@ function Workspace() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto px-4 py-2 space-y-4 min-h-0">
-            {messages.length === 0 && (
-              <div className="text-center py-10 animate-fade-in-up">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl gradient-brand text-primary-foreground shadow-glow mb-4">
-                  <Sparkles className="h-6 w-6" />
-                </div>
-                <h3 className="font-semibold">Start building</h3>
-                <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">
-                  Describe an app, drop a screenshot, or plan it out first. Kenzo writes the HTML, CSS and JS.
+          {messages.length === 0 ? (
+            /* ---------- Empty state: centered greeting + composer ---------- */
+            <div className="flex-1 min-h-0 overflow-auto flex flex-col items-center justify-center px-4 pb-8">
+              <div className="w-full max-w-2xl text-center animate-fade-in-up">
+                <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+                  {greeting}
+                </h2>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {mode === "plan"
+                    ? "Tell Kenzo the idea — it will shape the plan first."
+                    : "Describe an app, drop a screenshot, or speak it. Kenzo writes the code."}
                 </p>
-                <div className="mt-4 grid gap-2 max-w-xs mx-auto">
+                <div className="mt-7 text-left">{composer}</div>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {["Landing page for a coffee shop", "Interactive todo list with dark mode", "Portfolio with hero and projects grid"].map((s) => (
-                    <button key={s} onClick={() => { setInput(s); inputRef.current?.focus(); }} className="text-left text-xs px-3 py-2 rounded-lg glass hover:bg-surface transition active:scale-[0.99]">
+                    <button key={s} onClick={() => { setInput(s); inputRef.current?.focus(); }} className="rounded-full glass border border-glass-border px-3.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-surface transition active:scale-[0.98]">
                       {s}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-auto px-4 sm:px-6 py-4 space-y-6 min-h-0">
 
             {messages.map((m) => (
               <div key={m.id} className="animate-fade-in-up group">
@@ -878,7 +883,7 @@ function Workspace() {
                             ))}
                           </div>
                         )}
-                        <div className="inline-block max-w-[92%] rounded-2xl px-4 py-2.5 text-sm gradient-brand text-primary-foreground shadow-lift">
+                        <div className="inline-block max-w-[92%] rounded-2xl px-4 py-2.5 text-sm bg-primary text-primary-foreground shadow-lift">
                           <div className="whitespace-pre-wrap break-words text-left">{m.content}</div>
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
@@ -890,15 +895,16 @@ function Workspace() {
                   </div>
                 ) : (
                   <div>
-                    <div className={`inline-block max-w-[95%] rounded-2xl px-4 py-2.5 text-sm ${m.mode === "plan" ? "glass border-l-2 border-l-primary" : "glass"}`}>
-                      {m.mode === "plan" && (
-                        <div className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                          <ClipboardList className="h-3 w-3" /> Plan
-                        </div>
-                      )}
-                      <div className="break-words leading-relaxed" dangerouslySetInnerHTML={{ __html: md(m.content) }} />
-                    </div>
-                    <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
+                    {m.mode === "plan" && (
+                      <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-glass-border px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-primary">
+                        <ClipboardList className="h-3 w-3" /> Plan
+                      </div>
+                    )}
+                    <div
+                      className={`prose-kenzo break-words text-[15px] leading-7 text-foreground/90 ${m.mode === "plan" ? "font-serif" : ""}`}
+                      dangerouslySetInnerHTML={{ __html: md(m.content) }}
+                    />
+                    <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
                       <IconBtn label="Copy response" onClick={() => { navigator.clipboard.writeText(m.content); toast.success("Copied"); }}><Copy className="h-3 w-3" /></IconBtn>
                       <IconBtn label="Good response" active={m.feedback === "up"} onClick={() => react(m, "up")}><ThumbsUp className="h-3 w-3" /></IconBtn>
                       <IconBtn label="Bad response" active={m.feedback === "down"} onClick={() => react(m, "down")}><ThumbsDown className="h-3 w-3" /></IconBtn>
@@ -908,7 +914,7 @@ function Workspace() {
                         </button>
                       )}
                       {m.mode === "plan" && (
-                        <button onClick={() => { setMode("build"); setInput("Build the plan above."); inputRef.current?.focus(); }} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-primary hover:bg-surface transition active:scale-95">
+                        <button onClick={() => switchMode("build", "Build the plan above.")} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-primary hover:bg-surface transition active:scale-95">
                           <Hammer className="h-3 w-3" /> Build this
                         </button>
                       )}
@@ -959,83 +965,12 @@ function Workspace() {
               </div>
             )}
 
-            <div ref={chatEndRef} />
-          </div>
-
-          <form onSubmit={send} className="p-3 border-t border-glass-border glass">
-            <div className="mb-2 flex items-center gap-1 rounded-lg bg-input p-1 w-fit">
-              {([["build", Hammer, "Build"], ["plan", ClipboardList, "Plan"]] as const).map(([k, Icon, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setMode(k)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition active:scale-95 ${mode === k ? "gradient-brand text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  <Icon className="h-3 w-3" /> {label}
-                </button>
-              ))}
+              <div ref={chatEndRef} />
             </div>
+          )}
 
-            {attachments.length > 0 && (
-              <div className="mb-2 flex gap-2 flex-wrap">
-                {attachments.map((src, i) => (
-                  <div key={i} className="relative">
-                    <img src={src} alt="Attachment preview" className="h-14 w-14 rounded-lg object-cover border border-glass-border" />
-                    <button
-                      type="button"
-                      onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
-                      aria-label="Remove image"
-                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+          {messages.length > 0 && <div className="px-3 sm:px-4 pb-3">{composer}</div>}
 
-            <div className="flex gap-2 items-end">
-              <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => { onPickImages(e.target.files); e.target.value = ""; }} />
-              <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach images" aria-label="Attach images" className="rounded-lg glass p-2.5 hover:bg-surface transition active:scale-95">
-                <ImagePlus className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={recording ? stopRecording : startRecording}
-                title={recording ? "Stop recording" : "Record a voice prompt"}
-                aria-label={recording ? "Stop recording" : "Record a voice prompt"}
-                className={`rounded-lg p-2.5 transition active:scale-95 ${recording ? "bg-destructive text-destructive-foreground animate-pulse-glow" : "glass hover:bg-surface"}`}
-              >
-                {transcribing ? <Loader2 className="h-4 w-4 animate-spin" /> : recording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              </button>
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  const words = v.trim() ? v.trim().split(/\s+/) : [];
-                  if (words.length > MAX_WORDS) {
-                    setInput(words.slice(0, MAX_WORDS).join(" "));
-                    toast.error(`Prompts are limited to ${MAX_WORDS.toLocaleString()} words.`);
-                    return;
-                  }
-                  setInput(v);
-                }}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder={mode === "plan" ? "Describe the idea — Kenzo will plan it…" : "Ask Kenzo to build or change something…"}
-                rows={2}
-                className="flex-1 resize-none rounded-lg bg-input border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 max-h-40"
-              />
-              <button type="submit" disabled={busy || !input.trim()} aria-label="Send" className="rounded-lg gradient-brand p-2.5 text-primary-foreground shadow-lift disabled:opacity-50 transition hover:opacity-90 active:scale-95">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </button>
-            </div>
-            {input.trim() && (
-              <p className={`mt-1.5 text-right text-[11px] ${wordCount > MAX_WORDS * 0.9 ? "text-destructive" : "text-muted-foreground"}`}>
-                {wordCount.toLocaleString()} / {MAX_WORDS.toLocaleString()} words
-              </p>
-            )}
-          </form>
         </section>
 
         {/* Drag handle */}

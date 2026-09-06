@@ -56,9 +56,18 @@ ICONS — MANDATORY
 - Use them as: <span class="material-symbols-rounded" aria-hidden="true">search</span> and give icon-only buttons an aria-label.
 - In styles.css set: .material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; line-height: 1; user-select: none; } and size icons with font-size.
 
-IMAGES
-- Use real, working image URLs (e.g. https://images.unsplash.com/photo-...?w=1200&q=80) that match the content. Never use placeholder greys, broken paths, or made-up file names. Always set width/height or aspect-ratio, loading="lazy" and descriptive alt text.
+IMAGES — MANDATORY, MUST ACTUALLY LOAD
+- Every page must contain real photography wherever content implies it (hero, cards, gallery, avatars, backgrounds). Never ship an image-free page and never use grey placeholder boxes or invented file names.
+- Use ONLY these always-working sources:
+  • https://picsum.photos/seed/<unique-keyword>/1200/800 (deterministic photo per seed — safest default)
+  • https://images.unsplash.com/photo-<id>?w=1200&q=80 only when you are certain the photo id exists
+  • https://ui-avatars.com/api/?name=Jane+Doe&size=128&background=random for people avatars
+- Give every <img> width/height or aspect-ratio, loading="lazy", descriptive alt text, and onerror="this.src='https://picsum.photos/seed/fallback/1200/800'" so nothing ever renders broken.
+
+SCROLL EXPERIENCE
+- Add a slim fixed scroll-progress bar at the very top of the page (a div filled from script.js on scroll), plus smooth scrolling, scroll-reveal via IntersectionObserver, and a sticky header that condenses on scroll. Keep it subtle and professional, and disable motion under prefers-reduced-motion.
 - Keep the code clean, commented where non-obvious, and free of dead code.
+
 `;
 
 const Input = z.object({
@@ -79,6 +88,7 @@ const Input = z.object({
 });
 
 const ALLOWED_MODELS = new Set([
+  "auto",
   "google/gemini-3.1-pro-preview",
   "google/gemini-3.7-flash",
   "google/gemini-3.6-flash",
@@ -88,7 +98,22 @@ const ALLOWED_MODELS = new Set([
   "google/gemini-flash-latest",
 ]);
 
-const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
+/** Auto mode: strongest coder first, then progressively cheaper/always-available ones. */
+const AUTO_CHAIN = [
+  "google/gemini-3.6-flash",
+  "google/gemini-2.5-flash",
+  "google/gemini-flash-latest",
+  "google/gemini-2.5-flash-lite",
+];
+
+const DEFAULT_MODEL = "auto";
+
+/** Model ids to try, in order, for the requested setting. */
+function modelChain(requested?: string) {
+  if (!requested || requested === "auto" || !ALLOWED_MODELS.has(requested)) return AUTO_CHAIN;
+  return [requested, ...AUTO_CHAIN.filter((m) => m !== requested)];
+}
+
 
 type Result = { html: string; css: string; js: string; summary: string; name?: string; memory: string[] };
 
@@ -191,7 +216,7 @@ export const generateCode = createServerFn({ method: "POST" })
       );
 
 
-    const modelId = data.model && ALLOWED_MODELS.has(data.model) ? data.model : DEFAULT_MODEL;
+    const chain = modelChain(data.model ?? DEFAULT_MODEL);
 
     const personality = data.personality ?? "balanced";
     const verbosity = data.verbosity ?? "normal";
@@ -241,32 +266,34 @@ ${CONTRACT}`
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.${memBlock}`;
 
     try {
-      // Try each configured key in priority order; fall back when one fails,
-      // and tell the admins when a key is rate-limited or out of credits.
+      // Auto mode: walk the model chain, and inside it every configured key.
+      // A model that is unavailable, overloaded or rejects the request simply
+      // hands over to the next one, so a build never dies on one bad choice.
       let text = "";
       let lastErr: unknown = null;
-      for (let i = 0; i < keys.length; i++) {
-        const k = keys[i]!;
-        try {
-          text = await generateWithKey({
-            apiKey: k.api_key,
-            modelId,
-            system: sys,
-            parts,
-            maxOutputTokens: 32000,
-          });
-          lastErr = null;
-          break;
-        } catch (e) {
-          lastErr = e;
-          const m = e instanceof Error ? e.message : String(e);
-          console.error(`[generateCode] key "${k.label}" failed:`, m);
-          const exhausted = m.includes("402") || m.includes("429") || m.includes("401") || m.includes("403");
-          if (exhausted) await reportKeyExhausted(k, m);
-          if (i === keys.length - 1) throw e;
+      outer: for (const modelId of chain) {
+        for (const k of keys) {
+          try {
+            text = await generateWithKey({
+              apiKey: k.api_key,
+              modelId,
+              system: sys,
+              parts,
+              maxOutputTokens: 32000,
+            });
+            lastErr = null;
+            break outer;
+          } catch (e) {
+            lastErr = e;
+            const m = e instanceof Error ? e.message : String(e);
+            console.error(`[generateCode] ${modelId} / key "${k.label}" failed:`, m);
+            const exhausted = m.includes("402") || m.includes("429") || m.includes("401") || m.includes("403");
+            if (exhausted) await reportKeyExhausted(k, m);
+          }
         }
       }
       if (lastErr) throw lastErr;
+
 
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
