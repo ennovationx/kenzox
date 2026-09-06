@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Logo } from "@/components/Logo";
+import { ScrollProgress } from "@/components/ScrollProgress";
 import { ArrowRight, Sparkles, Code2, Eye, MessageSquare, Zap, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/")({
 function Landing() {
   return (
     <div className="min-h-screen">
+      <ScrollProgress />
       <header className="sticky top-3 z-40 px-3 sm:px-6">
         <div className="mx-auto max-w-4xl glass rounded-full border border-glass-border shadow-lift px-3 sm:px-5 h-12 flex items-center justify-between">
           <Logo size={22} />
@@ -30,10 +32,7 @@ function Landing() {
       </header>
 
       <section className="mx-auto max-w-5xl px-6 pt-24 pb-16 text-center animate-fade-in-up">
-        <span className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-xs font-medium text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-primary" /> Prompt to production, instantly
-        </span>
-        <h1 className="mt-6 text-5xl md:text-7xl font-bold tracking-tight leading-[1.05]">
+        <h1 className=" text-5xl md:text-7xl font-bold tracking-tight leading-[1.05]">
           Build web apps by <span className="text-gradient">chatting</span> with AI.
         </h1>
         <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
