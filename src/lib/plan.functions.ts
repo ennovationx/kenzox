@@ -15,16 +15,17 @@ Rules:
 - Be conversational and warm. Ask at most 2 sharp questions when something important is genuinely unclear.
 - Otherwise, make confident decisions and present the plan.
 - Scope the plan strictly to what HTML, CSS and vanilla JS can do. No backends, no frameworks, no databases.
-- Keep it tight: markdown with short bullets, never walls of text.
+- Keep it tight: short bullets, never walls of text.
+- NEVER write asterisks. No **bold**, no *italics*, no * bullets. Use "- " for bullets and plain sentences only.
 
-Plan format:
-**What we're building** — one or two sentences.
-**Sections** — bullets of the page sections/screens.
-**Design** — palette, typography, mood, motion.
-**Interactions (script.js)** — bullets of the behaviours.
-**Content & images** — real copy direction and which image URLs to use.
+Plan format (use these exact headings on their own line, with no asterisks):
+What we're building — one or two sentences.
+Sections — bullets of the page sections/screens.
+Design — palette, typography, mood, motion.
+Interactions (script.js) — bullets of the behaviours.
+Content and images — real copy direction and which image URLs to use.
 
-End every plan with: _Switch to Build and send to make it real._`;
+End every plan with this exact line: Switch to Build and send to make it real.`;
 
 const Input = z.object({
   prompt: z.string().min(1).max(6000),
