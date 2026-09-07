@@ -726,6 +726,121 @@ function Workspace() {
   }, [projects, query]);
   const errorCount = logs.filter((l) => l.level === "error").length;
 
+  /* ---------- greeting + mode switching + composer ---------- */
+  const firstName = (profile?.display_name || user?.email?.split("@")[0] || "there").split(" ")[0];
+  const greeting = mode === "plan" ? `Let's plan it out, ${firstName}` : `What should we build, ${firstName}?`;
+
+  /** Switch Plan <-> Build with a short cross-fade, optionally prefilling the box. */
+  function switchMode(next: "build" | "plan", prefill?: string) {
+    if (next === mode && !prefill) return;
+    setModeFx(true);
+    setMode(next);
+    if (prefill) setInput(prefill);
+    setModeMenu(false);
+    window.setTimeout(() => setModeFx(false), 420);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  const words = input.trim() ? input.trim().split(/\s+/).length : 0;
+  const overLimit = words > MAX_WORDS;
+
+  const composer = (
+    <form
+      onSubmit={send}
+      className={`rounded-2xl glass-strong border border-glass-border shadow-lift transition-all duration-300 ${modeFx ? "scale-[0.985] opacity-70" : "scale-100 opacity-100"} ${mode === "plan" ? "ring-1 ring-primary/30" : ""}`}
+    >
+      {attachments.length > 0 && (
+        <div className="flex gap-2 flex-wrap px-3 pt-3">
+          {attachments.map((src, i) => (
+            <div key={i} className="relative">
+              <img src={src} alt="Attachment" className="h-14 w-14 rounded-lg object-cover border border-glass-border" />
+              <button
+                type="button"
+                aria-label="Remove attachment"
+                onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}
+                className="absolute -top-1.5 -right-1.5 rounded-full bg-background border border-glass-border p-0.5 hover:bg-surface transition"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <textarea
+        ref={inputRef}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
+        }}
+        rows={3}
+        placeholder={mode === "plan" ? "Describe the idea — Kenzo will plan it first…" : "Describe what to build or change…"}
+        className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm outline-none placeholder:text-muted-foreground"
+      />
+
+      <div className="flex items-center gap-1 px-2.5 pb-2.5">
+        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => { void onPickImages(e.target.files); e.currentTarget.value = ""; }} />
+        <IconBtn label="Attach images" onClick={() => fileInputRef.current?.click()}><ImagePlus className="h-4 w-4" /></IconBtn>
+        <IconBtn
+          label={recording ? "Stop recording" : "Record voice"}
+          active={recording}
+          onClick={() => (recording ? void stopRecording() : void startRecording())}
+        >
+          {transcribing ? <Loader2 className="h-4 w-4 animate-spin" /> : recording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </IconBtn>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setModeMenu((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-glass-border px-2.5 py-1.5 text-xs font-medium hover:bg-surface transition active:scale-95"
+          >
+            {mode === "plan" ? <ClipboardList className="h-3.5 w-3.5 text-primary" /> : <Hammer className="h-3.5 w-3.5 text-primary" />}
+            {mode === "plan" ? "Plan" : "Build"}
+            <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${modeMenu ? "rotate-180" : ""}`} />
+          </button>
+          {modeMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setModeMenu(false)} />
+              <div className="absolute bottom-full left-0 mb-2 z-50 w-56 rounded-xl glass-strong border border-glass-border shadow-lift p-1 animate-fade-in-up">
+                {([["build", Hammer, "Build", "Write the code right away"], ["plan", ClipboardList, "Plan", "Shape the idea first"]] as const).map(([key, Icon, label, desc]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => switchMode(key)}
+                    className={`w-full flex items-start gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-surface ${mode === key ? "bg-primary/10" : ""}`}
+                  >
+                    <Icon className="h-4 w-4 mt-0.5 text-primary" />
+                    <span>
+                      <span className="block text-sm font-medium text-foreground">{label}</span>
+                      <span className="block text-[11px] text-muted-foreground">{desc}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <span className={`ml-auto text-[11px] tabular-nums ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>
+          {words > 0 ? `${words.toLocaleString()} / ${MAX_WORDS.toLocaleString()}` : ""}
+        </span>
+
+        <button
+          type="submit"
+          disabled={busy || !input.trim() || overLimit}
+          aria-label="Send message"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg gradient-brand text-primary-foreground shadow-lift transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </button>
+      </div>
+    </form>
+  );
+
+
+
   return (
     <div className="h-screen w-screen flex overflow-hidden">
       {/* Sidebar */}
