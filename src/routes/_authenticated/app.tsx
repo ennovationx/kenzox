@@ -53,6 +53,21 @@ const DEFAULT_FILES: Files = {
 
 const MAX_WORDS = 6000;
 
+/** Compact icon-only toolbar button used in the composer. */
+function IconBtn({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition active:scale-95 ${active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-surface hover:text-foreground"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 const CONSOLE_BRIDGE = `<script>(function(){
   var send=function(level,args){try{parent.postMessage({__kenzo:1,level:level,text:Array.prototype.map.call(args,function(a){
     try{return typeof a==="object"?JSON.stringify(a):String(a)}catch(e){return String(a)}}).join(" ")},"*")}catch(e){}};
