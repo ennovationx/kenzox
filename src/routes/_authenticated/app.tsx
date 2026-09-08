@@ -1096,6 +1096,7 @@ function Workspace() {
         </section>
 
         {/* Drag handle */}
+        {workspaceVisible && (
         <div
           role="separator"
           aria-orientation="vertical"
@@ -1106,10 +1107,13 @@ function Workspace() {
         >
           <div className={`h-10 w-0.5 rounded-full ${dragging ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
         </div>
+        )}
 
         {/* Code + Preview */}
-        <section className="flex-1 flex flex-col min-w-0 min-h-0">
+        {workspaceVisible && (
+        <section className="flex-1 flex flex-col min-w-0 min-h-0 animate-fade-in-up">
           <div className="p-2">
+
             <div className="h-12 flex items-center justify-between gap-2 px-2 rounded-xl glass border border-glass-border">
               <div className="flex gap-1 rounded-lg bg-input p-1">
                 {([["preview", "Preview"], ["code", "Code"], ["assets", "Files"]] as const).map(([k, label]) => (
