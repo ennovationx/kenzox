@@ -925,8 +925,9 @@ function Workspace() {
       {/* Main */}
       <main ref={splitRef} className="flex-1 flex flex-col lg:flex-row min-w-0">
         {/* Chat */}
-        <section className="flex flex-col w-full border-r border-glass-border lg:shrink-0 min-h-0" data-chat-panel>
-          <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>
+        <section className={`flex flex-col min-h-0 ${workspaceVisible ? "w-full border-r border-glass-border lg:shrink-0" : "flex-1 w-full"}`} data-chat-panel={workspaceVisible ? "" : undefined}>
+          {workspaceVisible && <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>}
+
 
           <div className="p-2">
             <div className="h-12 flex items-center gap-1 px-2 rounded-xl glass border border-glass-border">
