@@ -728,7 +728,11 @@ function Workspace() {
   }, [projects, query]);
   const errorCount = logs.filter((l) => l.level === "error").length;
 
+  /* Hide code/preview/console until the chat actually has something to show. */
+  const workspaceVisible = messages.length > 0 || busy;
+
   /* ---------- greeting + mode switching + composer ---------- */
+
   const firstName = (profile?.display_name || user?.email?.split("@")[0] || "there").split(" ")[0];
   const greeting = mode === "plan" ? `Let's plan it out, ${firstName}` : `What should we build, ${firstName}?`;
 
@@ -925,8 +929,9 @@ function Workspace() {
       {/* Main */}
       <main ref={splitRef} className="flex-1 flex flex-col lg:flex-row min-w-0">
         {/* Chat */}
-        <section className="flex flex-col w-full border-r border-glass-border lg:shrink-0 min-h-0" data-chat-panel>
-          <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>
+        <section className={`flex flex-col min-h-0 ${workspaceVisible ? "w-full border-r border-glass-border lg:shrink-0" : "flex-1 w-full"}`} data-chat-panel={workspaceVisible ? "" : undefined}>
+          {workspaceVisible && <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>}
+
 
           <div className="p-2">
             <div className="h-12 flex items-center gap-1 px-2 rounded-xl glass border border-glass-border">
@@ -1091,6 +1096,7 @@ function Workspace() {
         </section>
 
         {/* Drag handle */}
+        {workspaceVisible && (
         <div
           role="separator"
           aria-orientation="vertical"
@@ -1101,10 +1107,13 @@ function Workspace() {
         >
           <div className={`h-10 w-0.5 rounded-full ${dragging ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
         </div>
+        )}
 
         {/* Code + Preview */}
-        <section className="flex-1 flex flex-col min-w-0 min-h-0">
+        {workspaceVisible && (
+        <section className="flex-1 flex flex-col min-w-0 min-h-0 animate-fade-in-up">
           <div className="p-2">
+
             <div className="h-12 flex items-center justify-between gap-2 px-2 rounded-xl glass border border-glass-border">
               <div className="flex gap-1 rounded-lg bg-input p-1">
                 {([["preview", "Preview"], ["code", "Code"], ["assets", "Files"]] as const).map(([k, label]) => (
@@ -1304,6 +1313,8 @@ function Workspace() {
             )}
           </div>
         </section>
+        )}
+
       </main>
 
       {shareOpen && activeId && (
