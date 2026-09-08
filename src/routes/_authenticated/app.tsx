@@ -728,8 +728,8 @@ function Workspace() {
   }, [projects, query]);
   const errorCount = logs.filter((l) => l.level === "error").length;
 
-  /* Hide code/preview/console until the chat actually has something to show. */
-  const workspaceVisible = messages.length > 0 || busy;
+  /* Code/preview/console only appear once the chat has started AND we are in Build mode. */
+  const workspaceVisible = messages.length > 0 && mode === "build";
 
   /* ---------- greeting + mode switching + composer ---------- */
 
