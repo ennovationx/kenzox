@@ -191,6 +191,8 @@ function Workspace() {
 
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"build" | "plan">("build");
+  const [modeFx, setModeFx] = useState(false);
+  const [modeMenu, setModeMenu] = useState(false);
   const [attachments, setAttachments] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
