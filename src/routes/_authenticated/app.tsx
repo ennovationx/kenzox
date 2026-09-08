@@ -728,7 +728,11 @@ function Workspace() {
   }, [projects, query]);
   const errorCount = logs.filter((l) => l.level === "error").length;
 
+  /* Hide code/preview/console until the chat actually has something to show. */
+  const workspaceVisible = messages.length > 0 || busy;
+
   /* ---------- greeting + mode switching + composer ---------- */
+
   const firstName = (profile?.display_name || user?.email?.split("@")[0] || "there").split(" ")[0];
   const greeting = mode === "plan" ? `Let's plan it out, ${firstName}` : `What should we build, ${firstName}?`;
 
