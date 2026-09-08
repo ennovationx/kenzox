@@ -1313,6 +1313,8 @@ function Workspace() {
             )}
           </div>
         </section>
+        )}
+
       </main>
 
       {shareOpen && activeId && (
