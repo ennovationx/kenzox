@@ -186,3 +186,13 @@
   background: var(--primary); display: inline-block;
   animation: pulseGlow 1.2s ease-in-out infinite;
 }
+
+@media (min-width: 1024px) {
+  .chat-panel-resizable {
+    width: var(--chat-panel-width, 416px) !important;
+    min-width: 280px !important;
+    max-width: calc(100% - 360px) !important;
+    flex: none !important;
+  }
+}
+

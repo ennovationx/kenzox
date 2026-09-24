@@ -681,7 +681,12 @@ function Workspace() {
   /* ---------- layout ---------- */
   useEffect(() => {
     const saved = Number(localStorage.getItem("kenzo:chatWidth"));
-    if (saved >= 280 && saved <= 900) setChatWidth(saved);
+    if (saved >= 280 && saved <= 900) {
+      setChatWidth(saved);
+      if (splitRef.current) {
+        splitRef.current.style.setProperty("--chat-panel-width", `${saved}px`);
+      }
+    }
   }, []);
 
   /* ---------- persist sidebar collapsed ---------- */
@@ -698,7 +703,11 @@ function Workspace() {
       const minPreview = 360;
       const maxChat = Math.max(minChat, totalWidth - minPreview);
       const targetWidth = e.clientX - left;
-      setChatWidth(Math.max(minChat, Math.min(maxChat, targetWidth)));
+      const clamped = Math.max(minChat, Math.min(maxChat, targetWidth));
+      if (splitRef.current) {
+        splitRef.current.style.setProperty("--chat-panel-width", `${clamped}px`);
+      }
+      setChatWidth(clamped);
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!e.touches?.[0]) return;
@@ -708,7 +717,11 @@ function Workspace() {
       const minPreview = 360;
       const maxChat = Math.max(minChat, totalWidth - minPreview);
       const targetWidth = e.touches[0].clientX - left;
-      setChatWidth(Math.max(minChat, Math.min(maxChat, targetWidth)));
+      const clamped = Math.max(minChat, Math.min(maxChat, targetWidth));
+      if (splitRef.current) {
+        splitRef.current.style.setProperty("--chat-panel-width", `${clamped}px`);
+      }
+      setChatWidth(clamped);
     };
     const onUp = () => {
       setDragging(false);
@@ -2048,8 +2061,8 @@ function Workspace() {
   }, [projects, query]);
   const errorCount = logs.filter((l) => l.level === "error").length;
 
-  /* Code/preview/console only appear once the chat has started AND we are in Build mode. */
-  const workspaceVisible = messages.length > 0 && mode === "build";
+  /* Code/preview/console appear once chat has started OR an existing project is active, in Build mode. */
+  const workspaceVisible = (messages.length > 0 || (!draft && !!activeId)) && mode === "build";
 
   /* ---------- greeting + mode switching + composer ---------- */
 
@@ -2376,19 +2389,22 @@ function Workspace() {
       </aside>
 
       {/* Main */}
-      <main ref={splitRef} className="flex-1 flex flex-col lg:flex-row min-w-0">
+      <main
+        ref={splitRef}
+        style={{ "--chat-panel-width": `${chatWidth}px` } as React.CSSProperties}
+        className="flex-1 flex flex-col lg:flex-row min-w-0"
+      >
         {/* Chat */}
         <section
           className={`min-h-0 ${
             workspaceVisible
               ? mobileTab === "chat"
-                ? "flex flex-col flex-1 w-full lg:shrink-0 border-r border-glass-border"
-                : "hidden lg:flex lg:flex-col lg:shrink-0 border-r border-glass-border"
+                ? "chat-panel-resizable flex flex-col flex-1 w-full lg:flex-none lg:shrink-0 border-r border-glass-border"
+                : "chat-panel-resizable hidden lg:flex lg:flex-col lg:flex-none lg:shrink-0 border-r border-glass-border"
               : "flex flex-col flex-1 w-full"
           }`}
           data-chat-panel={workspaceVisible ? "" : undefined}
         >
-          {workspaceVisible && <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>}
 
 
           <div className="p-2">
@@ -2668,21 +2684,41 @@ function Workspace() {
           onDoubleClick={() => {
             const def = 420;
             setChatWidth(def);
+            if (splitRef.current) {
+              splitRef.current.style.setProperty("--chat-panel-width", `${def}px`);
+            }
             try { localStorage.setItem("kenzo:chatWidth", String(def)); } catch {}
-            toast.info("Panel width reset to default");
+            toast.info("Panel width reset to default (420px)");
           }}
-          className={`hidden lg:flex w-2 shrink-0 cursor-col-resize items-center justify-center relative select-none group ${
-            dragging ? "bg-primary/30" : "hover:bg-primary/20"
-          } transition-colors z-20`}
+          className={`hidden lg:flex w-3 shrink-0 cursor-col-resize items-center justify-center relative select-none group transition-colors z-30 ${
+            dragging ? "bg-primary/25" : "hover:bg-primary/15"
+          }`}
           title="Drag to resize chat and preview · Double-click to reset"
         >
+          {/* Expanded 24px grab zone for effortless cursor catching */}
+          <div className="absolute -inset-x-2 inset-y-0 cursor-col-resize z-10" />
+
+          {/* Grip pill with 3 micro-dots */}
           <div
-            className={`h-12 w-1 rounded-full transition-all ${
+            className={`h-16 w-1 rounded-full transition-all flex flex-col items-center justify-center gap-1 ${
               dragging
-                ? "bg-primary shadow-[0_0_8px_rgba(99,102,241,0.8)] scale-y-125"
-                : "bg-border group-hover:bg-primary/70"
+                ? "bg-primary shadow-[0_0_12px_rgba(99,102,241,0.9)] scale-y-110 w-1.5"
+                : "bg-border/80 group-hover:bg-primary/80 group-hover:w-1.5"
             }`}
-          />
+          >
+            <span className="h-0.5 w-0.5 rounded-full bg-background/90 shrink-0" />
+            <span className="h-0.5 w-0.5 rounded-full bg-background/90 shrink-0" />
+            <span className="h-0.5 w-0.5 rounded-full bg-background/90 shrink-0" />
+          </div>
+
+          {/* Floating live dimension indicator while resizing */}
+          {dragging && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 px-2.5 py-1 rounded-lg bg-popover/95 text-popover-foreground text-[11px] font-mono font-semibold shadow-2xl border border-primary/30 flex items-center gap-1.5 whitespace-nowrap animate-fade-in backdrop-blur-md">
+              <span className="text-primary font-bold">{chatWidth}px</span>
+              <span className="text-muted-foreground/60">|</span>
+              <span className="text-muted-foreground">{Math.max(360, (splitRef.current?.clientWidth ?? 1200) - chatWidth)}px</span>
+            </div>
+          )}
         </div>
         )}
 
@@ -3080,7 +3116,7 @@ function Workspace() {
                       title="Preview"
                       srcDoc={srcDoc}
                       sandbox="allow-scripts allow-forms allow-modals allow-popups"
-                      className="w-full h-full border-0 bg-white"
+                      className={`w-full h-full border-0 bg-white ${dragging ? "pointer-events-none" : ""}`}
                       onLoad={(e) => {
                         try {
                           (e.currentTarget as HTMLIFrameElement)?.contentWindow?.postMessage(
