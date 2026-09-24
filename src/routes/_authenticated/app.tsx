@@ -214,135 +214,6 @@ function cleanHtml(raw: string): string {
   return h;
 }
 
-function getVisualEditBridge(initActive = false): string {
-  return `<script>(function(){
-  var active = ${initActive ? "true" : "false"};
-  var style = document.createElement('style');
-  style.id = '__kenzo_ve_style';
-  style.textContent = \`
-    .kenzo-ve-hover {
-      outline: 2px dashed #10b981 !important;
-      outline-offset: 3px !important;
-      cursor: text !important;
-      position: relative !important;
-      transition: outline-color 0.15s ease !important;
-    }
-    .kenzo-ve-hover::after {
-      content: "✏️ Visual Edit: Click to edit text";
-      position: absolute;
-      top: -26px;
-      left: 0;
-      background: #10b981;
-      color: #ffffff;
-      font-size: 11px;
-      font-weight: 600;
-      font-family: system-ui, -apple-system, sans-serif;
-      padding: 3px 8px;
-      border-radius: 4px;
-      pointer-events: none;
-      z-index: 999999;
-      white-space: nowrap;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-      animation: kenzoVeFade 0.15s ease;
-    }
-    .kenzo-ve-hover.kenzo-ve-top::after {
-      top: auto;
-      bottom: -26px;
-    }
-    @keyframes kenzoVeFade {
-      from { opacity: 0; transform: translateY(3px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    [contenteditable="true"] {
-      outline: 2px solid #10b981 !important;
-      outline-offset: 3px !important;
-      background: rgba(16, 185, 129, 0.08) !important;
-      border-radius: 2px !important;
-      cursor: text !important;
-    }
-  \`;
-  document.head.appendChild(style);
-  style.disabled = !active;
-
-  function initVe() {
-    var targets = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, a, button, span, li, blockquote, label, small, strong, em, b');
-    targets.forEach(function(el) {
-      if (el.children.length === 0 || (el.children.length === 1 && (el.children[0].tagName === 'SPAN' || el.children[0].tagName === 'B'))) {
-        el.addEventListener('mouseenter', function() {
-          if (active && el.contentEditable !== "true") {
-            var rect = el.getBoundingClientRect();
-            if (rect.top < 32) {
-              el.classList.add('kenzo-ve-top');
-            } else {
-              el.classList.remove('kenzo-ve-top');
-            }
-            el.classList.add('kenzo-ve-hover');
-          }
-        });
-        el.addEventListener('mouseleave', function() {
-          el.classList.remove('kenzo-ve-hover');
-          el.classList.remove('kenzo-ve-top');
-        });
-        el.addEventListener('click', function(e) {
-          if (!active) return;
-          e.preventDefault();
-          e.stopPropagation();
-          el.classList.remove('kenzo-ve-hover');
-          el.classList.remove('kenzo-ve-top');
-          el.contentEditable = "true";
-          el.focus();
-          if (!el.getAttribute('data-original-text')) {
-            el.setAttribute('data-original-text', el.innerText.trim());
-          }
-        });
-        el.addEventListener('blur', function() {
-          if (el.contentEditable === "true") {
-            el.contentEditable = "false";
-            var newText = el.innerText.trim();
-            var oldText = el.getAttribute('data-original-text') || '';
-            if (newText && oldText && newText !== oldText) {
-              el.setAttribute('data-original-text', newText);
-              try {
-                parent.postMessage({
-                  __kenzo_visual_edit: true,
-                  oldText: oldText,
-                  newText: newText
-                }, '*');
-              } catch(err){}
-            }
-          }
-        });
-        el.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            el.blur();
-          }
-        });
-      }
-    });
-  }
-
-  window.addEventListener('message', function(e) {
-    if (e.data && e.data.__toggle_visual_edit !== undefined) {
-      active = Boolean(e.data.__toggle_visual_edit);
-      style.disabled = !active;
-      if (!active) {
-        document.querySelectorAll('[contenteditable="true"]').forEach(function(el) {
-          el.contentEditable = "false";
-          el.classList.remove('kenzo-ve-hover');
-          el.classList.remove('kenzo-ve-top');
-        });
-      }
-    }
-  });
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initVe);
-  } else {
-    initVe();
-  }
-})();</script>`;
-}
 
 function highlightSyntax(code: string, file: string): string {
   if (!code) return "";
@@ -393,7 +264,7 @@ function highlightSyntax(code: string, file: string): string {
   return s;
 }
 
-function buildSrcDoc(f: Files, visualEdit = false): string {
+function buildSrcDoc(f: Files): string {
   let html = cleanHtml(f["index.html"] || "");
   const css = (f["styles.css"] || "").replace(/<\/?style[^>]*>/gi, "").replace(/<<<[A-Za-z0-9_.:\s-]+>>>/gi, "");
   const js = (f["script.js"] || "").replace(/<\/?script[^>]*>/gi, "").replace(/<<<[A-Za-z0-9_.:\s-]+>>>/gi, "");
@@ -401,9 +272,8 @@ function buildSrcDoc(f: Files, visualEdit = false): string {
   html = html.replace(/<script\s+[^>]*src=["']script\.js["'][^>]*><\/script>/i, `<script>${js}</script>`);
   if (!/<style>/.test(html) && css) html = html.replace("</head>", `<style>${css}</style></head>`);
   if (!/<script>/.test(html) && js) html = html.replace("</body>", `<script>${js}</script></body>`);
-  const bridges = CONSOLE_BRIDGE + getVisualEditBridge(visualEdit);
-  if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => m + bridges);
-  else html = bridges + html;
+  if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => m + CONSOLE_BRIDGE);
+  else html = CONSOLE_BRIDGE + html;
   return html;
 }
 
@@ -746,8 +616,7 @@ function Workspace() {
     };
   }, [dragging]);
 
-  const [visualEditMode, setVisualEditMode] = useState(false);
-  const [codeViewMode, setCodeViewMode] = useState<"syntax" | "edit">("syntax");
+    const [codeViewMode, setCodeViewMode] = useState<"syntax" | "edit">("syntax");
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
 
   /* ---------- console bridge & visual edit listener ---------- */
@@ -757,46 +626,6 @@ function Workspace() {
       if (!d) return;
       if (d.__kenzo === 1) {
         setLogs((prev) => [...prev.slice(-199), { id: ++logId.current, level: d.level ?? "log", text: d.text ?? "" }]);
-      }
-      if (d.__kenzo_visual_edit && d.newText) {
-        const oldText = d.oldText;
-        const newText = d.newText;
-        setFiles((current) => {
-          const raw = current["index.html"] || "";
-          if (oldText && raw.includes(oldText)) {
-            const next = raw.replace(oldText, newText);
-            const nextFiles = { ...current, "index.html": next };
-            scheduleSave(nextFiles);
-            toast.success("Visual Edit Saved", {
-              description: `"${oldText.slice(0, 24)}" → "${newText.slice(0, 24)}" updated in code`,
-            });
-            return nextFiles;
-          } else if (oldText) {
-            const trimmedOld = oldText.trim();
-            const decodedOld = trimmedOld
-              .replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;");
-            if (raw.includes(trimmedOld)) {
-              const next = raw.replace(trimmedOld, newText);
-              const nextFiles = { ...current, "index.html": next };
-              scheduleSave(nextFiles);
-              toast.success("Visual Edit Saved", {
-                description: `"${trimmedOld.slice(0, 24)}" → "${newText.slice(0, 24)}" updated in code`,
-              });
-              return nextFiles;
-            } else if (raw.includes(decodedOld)) {
-              const next = raw.replace(decodedOld, newText);
-              const nextFiles = { ...current, "index.html": next };
-              scheduleSave(nextFiles);
-              toast.success("Visual Edit Saved", {
-                description: `"${trimmedOld.slice(0, 24)}" → "${newText.slice(0, 24)}" updated in code`,
-              });
-              return nextFiles;
-            }
-          }
-          return current;
-        });
       }
       if (d.__kenzo_open_publish) {
         setPublishMenuOpen(true);
@@ -808,11 +637,6 @@ function Workspace() {
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, []);
-
-  useEffect(() => {
-    const iframe = document.querySelector('iframe[title="Preview"]') as HTMLIFrameElement | null;
-    iframe?.contentWindow?.postMessage({ __toggle_visual_edit: visualEditMode }, "*");
-  }, [visualEditMode, previewNonce]);
 
   /* ---------- boot ---------- */
   const wordCount = useMemo(() => (input.trim() ? input.trim().split(/\s+/).length : 0), [input]);
@@ -974,7 +798,14 @@ function Workspace() {
       .select("id, role, content, mode, snapshot, feedback, attachments")
       .eq("project_id", p.id)
       .order("created_at");
-    setMessages((data ?? []) as Msg[]);
+    const rawMsgs = (data ?? []) as Msg[];
+    const deduped: Msg[] = [];
+    for (const m of rawMsgs) {
+      const prev = deduped[deduped.length - 1];
+      if (prev && prev.role === m.role && prev.content === m.content) continue;
+      deduped.push(m);
+    }
+    setMessages(deduped);
     setSidebarOpen(false);
     setPreviewNonce((n) => n + 1);
     if (backgroundGeneratingProjectId === p.id) {
@@ -1381,13 +1212,14 @@ function Workspace() {
         mode: "build",
         snapshot: nextFiles,
       };
-      await persistMsg(projectId, asst);
-
       if (activeIdRef.current === projectId) {
         setFiles(nextFiles);
         setLogs([]);
         void animateCode(nextFiles);
-        setMessages((m) => [...m, asst]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === asst.id || (m.role === asst.role && m.content === asst.content))) return prev;
+          return [...prev, asst];
+        });
         setPreviewNonce((n) => n + 1);
         setMobileTab("preview");
       } else {
@@ -1712,7 +1544,7 @@ function Workspace() {
       toast.error("Popup blocked — please allow popups for external preview");
       return;
     }
-    const currentDoc = buildSrcDoc(files, visualEditMode);
+    const currentDoc = buildSrcDoc(files);
     const projTitle = projectName || "Kenzo App";
 
     const externalHtml = `<!DOCTYPE html>
@@ -1724,155 +1556,43 @@ function Workspace() {
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0b0c10;
-      color: #f8fafc;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    header {
-      height: 54px;
-      background: rgba(18, 20, 29, 0.95);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      z-index: 100;
-    }
-    .brand-section {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .logo-badge {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 700;
-      font-size: 15px;
-      color: #ffffff;
-    }
-    .logo-badge span {
-      background: linear-gradient(135deg, #6366f1, #a855f7);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .project-name {
-      font-size: 13px;
-      font-weight: 500;
-      color: #94a3b8;
-      border-left: 1px solid rgba(255, 255, 255, 0.12);
-      padding-left: 12px;
-      max-width: 220px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .device-controls {
-      display: flex;
-      align-items: center;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
-      padding: 3px;
-      gap: 3px;
-    }
-    .device-btn {
-      background: transparent;
-      border: 0;
-      color: #94a3b8;
-      font-size: 12px;
-      font-weight: 500;
-      padding: 5px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .device-btn:hover { color: #fff; }
-    .device-btn.active {
-      background: rgba(255, 255, 255, 0.12);
-      color: #ffffff;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    .actions-section {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .status-pill {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      color: #10b981;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.25);
-      padding: 4px 10px;
-      border-radius: 9999px;
-    }
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 8px #10b981;
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
-    .publish-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
-      color: #ffffff;
-      font-weight: 600;
-      font-size: 13px;
-      padding: 7px 18px;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .publish-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
-      opacity: 0.95;
-    }
-    .publish-btn:active {
-      transform: translateY(0);
-    }
-    .preview-canvas {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      overflow: auto;
-      background: radial-gradient(circle at 50% 50%, #151722 0%, #0b0c10 100%);
-    }
-    .frame-wrapper {
+    html, body {
       width: 100%;
       height: 100%;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
       overflow: hidden;
-      display: flex;
-      flex-direction: column;
+      background: #000;
+      position: relative;
     }
     iframe {
       width: 100%;
       height: 100%;
-      border: none;
-      background: #ffffff;
+      border: 0;
+      display: block;
+    }
+    .deploy-float-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999999;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .deploy-float-btn:hover {
+      transform: scale(1.1) translateY(-2px);
+      box-shadow: 0 12px 32px rgba(99, 102, 241, 0.65);
+    }
+    .deploy-float-btn:active {
+      transform: scale(0.95);
     }
     .modal-overlay {
       display: none;
@@ -1880,7 +1600,7 @@ function Workspace() {
       inset: 0;
       background: rgba(0,0,0,0.75);
       backdrop-filter: blur(6px);
-      z-index: 999;
+      z-index: 1000000;
       align-items: center;
       justify-content: center;
       padding: 20px;
@@ -1894,6 +1614,7 @@ function Workspace() {
       padding: 24px;
       box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6);
       text-align: left;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .modal-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
     .modal-desc { font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px; }
@@ -1931,49 +1652,22 @@ function Workspace() {
   </style>
 </head>
 <body>
-  <header>
-    <div class="brand-section">
-      <div class="logo-badge">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#6366f1"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-        <span>Kenzo</span>
-      </div>
-      <div class="project-name">${projTitle}</div>
-    </div>
-
-    <div class="device-controls">
-      <button class="device-btn active" onclick="setViewport('desktop', this)">Desktop</button>
-      <button class="device-btn" onclick="setViewport('tablet', this)">Tablet (768px)</button>
-      <button class="device-btn" onclick="setViewport('mobile', this)">Mobile (375px)</button>
-    </div>
-
-    <div class="actions-section">
-      <div class="status-pill">
-        <div class="status-dot"></div>
-        <span>Live Staging</span>
-      </div>
-      <button class="publish-btn" onclick="openPublishModal()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
-        Publish
-      </button>
-    </div>
-  </header>
-
-  <main class="preview-canvas">
-    <div id="frameWrapper" class="frame-wrapper" style="max-width: 100%;">
-      <iframe id="previewIframe" title="Live Preview"></iframe>
-    </div>
-  </main>
+  <iframe id="liveFrame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"></iframe>
+  
+  <button class="deploy-float-btn" onclick="openPublishModal()" title="Publish & Deploy Website">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+  </button>
 
   <div id="publishModal" class="modal-overlay" onclick="if(event.target===this)closePublishModal()">
     <div class="modal-card">
-      <h3 class="modal-title">Publish & Deploy Website</h3>
-      <p class="modal-desc">Launch your website live worldwide on high-speed global Edge CDN or push directly to GitHub.</p>
+      <h3 class="modal-title">Publish Website</h3>
+      <p class="modal-desc">Launch your website live on global Edge CDN or push all code to GitHub.</p>
       
       <div class="deploy-option" onclick="deployNetlify()">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#25c2a0" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
         <div>
           <div class="deploy-btn-text">Publish to Netlify</div>
-          <div class="deploy-btn-sub">Instant global SSL hosting & live public link</div>
+          <div class="deploy-btn-sub">Instant live public URL & SSL hosting</div>
         </div>
       </div>
 
@@ -1981,7 +1675,7 @@ function Workspace() {
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
         <div>
           <div class="deploy-btn-text">Push to GitHub</div>
-          <div class="deploy-btn-sub">Commit all 3 files + README to your GitHub repo</div>
+          <div class="deploy-btn-sub">Sync files to your GitHub repository</div>
         </div>
       </div>
 
@@ -1991,47 +1685,31 @@ function Workspace() {
 
   <script>
     var currentDoc = ${JSON.stringify(currentDoc)};
-    var iframe = document.getElementById('previewIframe');
+    var iframe = document.getElementById('liveFrame');
     iframe.srcdoc = currentDoc;
-
-    function setViewport(device, btn) {
-      document.querySelectorAll('.device-btn').forEach(function(b){ b.classList.remove('active'); });
-      btn.classList.add('active');
-      var wrapper = document.getElementById('frameWrapper');
-      if (device === 'mobile') {
-        wrapper.style.maxWidth = '375px';
-      } else if (device === 'tablet') {
-        wrapper.style.maxWidth = '768px';
-      } else {
-        wrapper.style.maxWidth = '100%';
-      }
-    }
 
     function openPublishModal() {
       document.getElementById('publishModal').style.display = 'flex';
     }
-
     function closePublishModal() {
       document.getElementById('publishModal').style.display = 'none';
     }
-
     function deployNetlify() {
-      if (window.opener) {
+      closePublishModal();
+      if (window.opener && !window.opener.closed) {
         window.opener.postMessage({ __kenzo_open_publish: true }, '*');
         window.opener.focus();
-        closePublishModal();
       } else {
-        alert("Please return to the Kenzo editor tab to complete Netlify publication!");
+        alert('Please open Kenzo workspace tab to deploy to Netlify.');
       }
     }
-
     function deployGithub() {
-      if (window.opener) {
+      closePublishModal();
+      if (window.opener && !window.opener.closed) {
         window.opener.postMessage({ __kenzo_open_github: true }, '*');
         window.opener.focus();
-        closePublishModal();
       } else {
-        alert("Please return to the Kenzo editor tab to push to GitHub!");
+        alert('Please open Kenzo workspace tab to push to GitHub.');
       }
     }
   </script>
@@ -2053,7 +1731,7 @@ function Workspace() {
     navigate({ to: "/", replace: true });
   }
 
-  const srcDoc = useMemo(() => buildSrcDoc(files, visualEditMode), [files, visualEditMode]);
+  const srcDoc = useMemo(() => buildSrcDoc(files), [files]);
   const assets = useMemo(() => collectAssets(files), [files]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -2830,21 +2508,6 @@ function Workspace() {
                 >
                   <ExternalLink className="h-4 w-4" />
                 </button>
-                {rightTab === "preview" && (
-                  <button
-                    type="button"
-                    onClick={() => setVisualEditMode((v) => !v)}
-                    title={`Visual Editing: ${visualEditMode ? "Active" : "Click to enable"}`}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 border cursor-pointer shrink-0 ${
-                      visualEditMode
-                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-xs ring-1 ring-emerald-500/30 font-semibold"
-                        : "hover:bg-surface text-muted-foreground border-glass-border hover:text-foreground"
-                    }`}
-                  >
-                    <Pencil className="h-3.5 w-3.5 shrink-0" />
-                    <span className="hidden 2xl:inline">Visual Edit</span>
-                  </button>
-                )}
                 <div className="relative">
                   <button onClick={() => setExportOpen((v) => !v)} title="Download" aria-label="Download" className="inline-flex items-center gap-1 p-2 rounded-lg hover:bg-surface transition active:scale-95">
                     {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -2907,19 +2570,6 @@ function Workspace() {
                     })}
                   </div>
                   <div className="flex items-center gap-1 pr-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setVisualEditMode((v) => !v)}
-                      title={`Visual Editing: ${visualEditMode ? "Active" : "Click to enable"}`}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-sans font-medium transition active:scale-95 cursor-pointer shrink-0 ${
-                        visualEditMode
-                          ? "bg-emerald-500/25 text-emerald-400 border border-emerald-500/40"
-                          : "text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e]"
-                      }`}
-                    >
-                      <Pencil className="h-3 w-3 shrink-0" />
-                      <span className="hidden 2xl:inline">Visual Edit</span>
-                    </button>
                     <button
                       type="button"
                       onClick={formatCurrentFile}
@@ -3030,34 +2680,6 @@ function Workspace() {
                     />
                   </div>
                 </div>
-
-                {/* VS Code Status Bar (Footer) */}
-                <div className="h-6 bg-[#007acc] text-white flex items-center justify-between px-3 text-[11px] font-sans select-none shrink-0 font-medium">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 font-mono text-[10px]">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-                      main
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setVisualEditMode((v) => !v)}
-                      className="flex items-center gap-1 hover:underline cursor-pointer"
-                      title="Visual Editing: Click any text directly on the website to edit"
-                    >
-                      <Pencil className="h-2.5 w-2.5" />
-                      <span>Visual Edit: {visualEditMode ? "ON" : "OFF"}</span>
-                    </button>
-                    <span>0 errors</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-[10px] font-mono">
-                    <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
-                    <span className="hidden sm:inline">Spaces: 2</span>
-                    <span className="hidden sm:inline">UTF-8</span>
-                    <span className="font-bold">
-                      {activeFile === "index.html" ? "HTML" : activeFile === "styles.css" ? "CSS" : "JavaScript"}
-                    </span>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -3117,64 +2739,8 @@ function Workspace() {
                       srcDoc={srcDoc}
                       sandbox="allow-scripts allow-forms allow-modals allow-popups"
                       className={`w-full h-full border-0 bg-white ${dragging ? "pointer-events-none" : ""}`}
-                      onLoad={(e) => {
-                        try {
-                          (e.currentTarget as HTMLIFrameElement)?.contentWindow?.postMessage(
-                            { __toggle_visual_edit: visualEditMode },
-                            "*"
-                          );
-                        } catch {}
-                      }}
+                      onLoad={() => {}}
                     />
-                  </div>
-                </div>
-
-                {/* Bottom preview status & visual editing bar */}
-                <div className="shrink-0 h-9 px-3 glass border-t border-glass-border flex items-center justify-between text-xs select-none">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setVisualEditMode((v) => !v)}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
-                        visualEditMode
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-xs"
-                          : "text-muted-foreground hover:text-foreground hover:bg-surface border border-transparent"
-                      }`}
-                      title="Toggle Visual Editing on the website preview"
-                    >
-                      <Pencil className="h-3 w-3" />
-                      <span>{visualEditMode ? "Visual Edit: ON" : "Visual Edit: OFF"}</span>
-                    </button>
-                    {visualEditMode ? (
-                      <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        Hover any text element to edit · Auto-saves to code
-                      </span>
-                    ) : (
-                      <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                        Click "Visual Edit" to edit any text directly on the preview
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRightTab("code")}
-                      className="text-[11px] text-muted-foreground hover:text-foreground hover:underline inline-flex items-center gap-1"
-                      title="Switch to VS Code editor view"
-                    >
-                      <Code2 className="h-3 w-3" />
-                      <span className="hidden sm:inline">View in Code</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openExternalPreview}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-semibold bg-gradient-to-r from-primary to-accent text-white shadow-xs hover:opacity-95 transition active:scale-95 cursor-pointer"
-                      title="Open full staging preview with Publish toolbar"
-                    >
-                      <Rocket className="h-3 w-3" />
-                      <span>Publish & Share</span>
-                    </button>
                   </div>
                 </div>
               </div>

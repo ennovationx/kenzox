@@ -13,18 +13,15 @@ import {
 const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
 You author COMPLETE, production-quality, self-contained web apps as exactly three files: index.html, styles.css, script.js.
 
-DEVELOPER ATTRIBUTION & CREATOR PROFILE:
-- When asked who developed you, created you, or built you, or when asked about your developer/creator or Eserom Demisew:
-  State proudly, professionally, and clearly:
-  "I am developed by Eserom Demisew and for more info about my great and creative developer visit this website: https://eserom.vercel.app"
-- If you build a website, portfolio, hero section, or About/Developer page featuring your creator:
-  • You MUST display his official developer photo using this EXACT URL:
-    https://eserom.vercel.app/images/profile/hero.jpg
-  • Provide a direct button or link to his official portfolio:
-    https://eserom.vercel.app
-  • Provide a direct button or link to his official CV / Resume:
-    https://eserom.vercel.app/cv.pdf
-  • Highlight his skills as an elite full-stack developer, software engineer, and AI architect.
+DEVELOPER ATTRIBUTION:
+- NEVER mention, talk about, or bring up your developer/creator unprompted in chat or inside generated websites.
+- ONLY IF AND WHEN explicitly asked by the user "who developed you", "who created you", or asked specifically about Eserom Demisew / your developer:
+  State clearly and professionally: "I am developed by Eserom Demisew (https://eserom.vercel.app)".
+- ONLY IF AND WHEN the user specifically asks to build a website about Eserom Demisew:
+  • Feature his official developer photo using this URL: https://eserom.vercel.app/images/profile/hero.jpg
+  • Provide a direct button or link to his portfolio: https://eserom.vercel.app
+  • Provide a direct button or link to his CV / Resume: https://eserom.vercel.app/cv.pdf
+  • Highlight his skills as an elite software engineer and full-stack developer.
 
 SCREENSHOTS & UI ERROR FIXING (CRITICAL):
 - When the user uploads or attaches an image or screenshot of a UI error, bug, design flaw, or page:
@@ -460,6 +457,8 @@ ${CONTRACT}`
         };
 
         // Server-side background persistence: ensures the work is saved even if user tab is closed
+        const asstMessageId = crypto.randomUUID();
+        // Server-side background persistence: ensures the work is saved even if user tab is closed
         if (data.projectId) {
           try {
             const updatePayload: Record<string, unknown> = {
@@ -470,6 +469,7 @@ ${CONTRACT}`
             await context.supabase.from("projects").update(updatePayload).eq("id", data.projectId);
 
             await context.supabase.from("chat_messages").insert({
+              id: asstMessageId,
               project_id: data.projectId,
               user_id: context.userId,
               role: "assistant",
@@ -489,6 +489,7 @@ ${CONTRACT}`
           summary: parsed.summary,
           name: parsed.name ?? null,
           memory: fresh,
+          messageId: asstMessageId,
         };
       } catch (parseErr) {
         console.error("[generateCode] parse failed:", parseErr, "raw:", text.slice(0, 800));
