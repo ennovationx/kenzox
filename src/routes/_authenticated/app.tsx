@@ -22,7 +22,7 @@ import {
   ImagePlus, Terminal, History, ThumbsUp, ThumbsDown, Pencil, Check, Hammer,
   ClipboardList, Image as ImageIcon, MessageSquare, FolderTree, Camera, AlertTriangle,
   Coffee, CheckSquare, Briefcase, BarChart3, Gamepad2, Headphones, UtensilsCrossed,
-  Flame, TrendingUp, Compass, Dumbbell, Shuffle, ArrowUpRight,
+  Flame, TrendingUp, Compass, Dumbbell, Shuffle, ArrowUpRight, Rocket, Wand2, Eye,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -213,7 +213,186 @@ function cleanHtml(raw: string): string {
   return h;
 }
 
-function buildSrcDoc(f: Files): string {
+function getVisualEditBridge(initActive = false): string {
+  return `<script>(function(){
+  var active = ${initActive ? "true" : "false"};
+  var style = document.createElement('style');
+  style.id = '__kenzo_ve_style';
+  style.textContent = \`
+    .kenzo-ve-hover {
+      outline: 2px dashed #10b981 !important;
+      outline-offset: 3px !important;
+      cursor: text !important;
+      position: relative !important;
+      transition: outline-color 0.15s ease !important;
+    }
+    .kenzo-ve-hover::after {
+      content: "✏️ Visual Edit: Click to edit text";
+      position: absolute;
+      top: -26px;
+      left: 0;
+      background: #10b981;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 999999;
+      white-space: nowrap;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+      animation: kenzoVeFade 0.15s ease;
+    }
+    .kenzo-ve-hover.kenzo-ve-top::after {
+      top: auto;
+      bottom: -26px;
+    }
+    @keyframes kenzoVeFade {
+      from { opacity: 0; transform: translateY(3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    [contenteditable="true"] {
+      outline: 2px solid #10b981 !important;
+      outline-offset: 3px !important;
+      background: rgba(16, 185, 129, 0.08) !important;
+      border-radius: 2px !important;
+      cursor: text !important;
+    }
+  \`;
+  document.head.appendChild(style);
+  style.disabled = !active;
+
+  function initVe() {
+    var targets = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, a, button, span, li, blockquote, label, small, strong, em, b');
+    targets.forEach(function(el) {
+      if (el.children.length === 0 || (el.children.length === 1 && (el.children[0].tagName === 'SPAN' || el.children[0].tagName === 'B'))) {
+        el.addEventListener('mouseenter', function() {
+          if (active && el.contentEditable !== "true") {
+            var rect = el.getBoundingClientRect();
+            if (rect.top < 32) {
+              el.classList.add('kenzo-ve-top');
+            } else {
+              el.classList.remove('kenzo-ve-top');
+            }
+            el.classList.add('kenzo-ve-hover');
+          }
+        });
+        el.addEventListener('mouseleave', function() {
+          el.classList.remove('kenzo-ve-hover');
+          el.classList.remove('kenzo-ve-top');
+        });
+        el.addEventListener('click', function(e) {
+          if (!active) return;
+          e.preventDefault();
+          e.stopPropagation();
+          el.classList.remove('kenzo-ve-hover');
+          el.classList.remove('kenzo-ve-top');
+          el.contentEditable = "true";
+          el.focus();
+          if (!el.getAttribute('data-original-text')) {
+            el.setAttribute('data-original-text', el.innerText.trim());
+          }
+        });
+        el.addEventListener('blur', function() {
+          if (el.contentEditable === "true") {
+            el.contentEditable = "false";
+            var newText = el.innerText.trim();
+            var oldText = el.getAttribute('data-original-text') || '';
+            if (newText && oldText && newText !== oldText) {
+              el.setAttribute('data-original-text', newText);
+              try {
+                parent.postMessage({
+                  __kenzo_visual_edit: true,
+                  oldText: oldText,
+                  newText: newText
+                }, '*');
+              } catch(err){}
+            }
+          }
+        });
+        el.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            el.blur();
+          }
+        });
+      }
+    });
+  }
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.__toggle_visual_edit !== undefined) {
+      active = Boolean(e.data.__toggle_visual_edit);
+      style.disabled = !active;
+      if (!active) {
+        document.querySelectorAll('[contenteditable="true"]').forEach(function(el) {
+          el.contentEditable = "false";
+          el.classList.remove('kenzo-ve-hover');
+          el.classList.remove('kenzo-ve-top');
+        });
+      }
+    }
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initVe);
+  } else {
+    initVe();
+  }
+})();</script>`;
+}
+
+function highlightSyntax(code: string, file: string): string {
+  if (!code) return "";
+  let s = code
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  if (file === "index.html") {
+    s = s.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '§C§$1§/§');
+    s = s.replace(/(&lt;\/?[a-zA-Z0-9\-]+)/g, '§T§$1§/§');
+    s = s.replace(/(\/?&gt;)/g, '§T§$1§/§');
+    s = s.replace(/(\s+)([a-zA-Z0-9\-:]+)(?==)/g, '$1§A§$2§/§');
+    s = s.replace(/="([^"]*)"/g, '=§S§"$1"§/§');
+    s = s
+      .replace(/§C§(.*?)§\/§/gs, '<span style="color:#6a9955;font-style:italic">$1</span>')
+      .replace(/§T§(.*?)§\/§/g, '<span style="color:#569cd6">$1</span>')
+      .replace(/§A§(.*?)§\/§/g, '<span style="color:#9cdcfe">$1</span>')
+      .replace(/§S§(.*?)§\/§/g, '<span style="color:#ce9178">$1</span>');
+  } else if (file === "styles.css") {
+    s = s.replace(/(\/\*[\s\S]*?\*\/)/g, '§C§$1§/§');
+    s = s.replace(/(#[a-fA-F0-9]{3,8}|"[^"]*"|'[^']*')/g, '§S§$1§/§');
+    s = s.replace(/([a-zA-Z0-9\-]+)\s*:/g, '§P§$1§/§:');
+    s = s.replace(/\b(\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|s|ms|deg|fr)?)\b/g, '§N§$1§/§');
+    s = s.replace(/(^|[{}\n\r])([.#]?[a-zA-Z0-9_\-:[\]=^$*~>+,\s]+)(?=\s*\{)/gm, '$1§K§$2§/§');
+    s = s
+      .replace(/§C§(.*?)§\/§/gs, '<span style="color:#6a9955;font-style:italic">$1</span>')
+      .replace(/§S§(.*?)§\/§/g, '<span style="color:#ce9178">$1</span>')
+      .replace(/§P§(.*?)§\/§/g, '<span style="color:#9cdcfe">$1</span>')
+      .replace(/§N§(.*?)§\/§/g, '<span style="color:#b5cea8">$1</span>')
+      .replace(/§K§(.*?)§\/§/g, '<span style="color:#d7ba7d">$1</span>');
+  } else if (file === "script.js") {
+    s = s.replace(/(\/\/.*$)/gm, '§C§$1§/§');
+    s = s.replace(/(\/\*[\s\S]*?\*\/)/g, '§C§$1§/§');
+    s = s.replace(/("[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\]*(?:\\.[^`\\]*)*`)/g, '§S§$1§/§');
+    s = s.replace(/\b(const|let|var|function|return|if|else|for|while|async|await|try|catch|new|class|import|export|from|default|switch|case|break|typeof|instanceof)\b/g, '§K§$1§/§');
+    s = s.replace(/\b(true|false|null|undefined|NaN|document|window|console)\b/g, '§B§$1§/§');
+    s = s.replace(/\b(\d+(?:\.\d+)?)\b/g, '§N§$1§/§');
+    s = s.replace(/([a-zA-Z0-9_$]+)(?=\()/g, '§F§$1§/§');
+    s = s
+      .replace(/§C§(.*?)§\/§/gs, '<span style="color:#6a9955;font-style:italic">$1</span>')
+      .replace(/§S§(.*?)§\/§/g, '<span style="color:#ce9178">$1</span>')
+      .replace(/§K§(.*?)§\/§/g, '<span style="color:#c586c0;font-weight:600">$1</span>')
+      .replace(/§B§(.*?)§\/§/g, '<span style="color:#569cd6">$1</span>')
+      .replace(/§N§(.*?)§\/§/g, '<span style="color:#b5cea8">$1</span>')
+      .replace(/§F§(.*?)§\/§/g, '<span style="color:#dcdcaa">$1</span>');
+  }
+  return s;
+}
+
+function buildSrcDoc(f: Files, visualEdit = false): string {
   let html = cleanHtml(f["index.html"] || "");
   const css = (f["styles.css"] || "").replace(/<\/?style[^>]*>/gi, "").replace(/<<<[A-Za-z0-9_.:\s-]+>>>/gi, "");
   const js = (f["script.js"] || "").replace(/<\/?script[^>]*>/gi, "").replace(/<<<[A-Za-z0-9_.:\s-]+>>>/gi, "");
@@ -221,8 +400,9 @@ function buildSrcDoc(f: Files): string {
   html = html.replace(/<script\s+[^>]*src=["']script\.js["'][^>]*><\/script>/i, `<script>${js}</script>`);
   if (!/<style>/.test(html) && css) html = html.replace("</head>", `<style>${css}</style></head>`);
   if (!/<script>/.test(html) && js) html = html.replace("</body>", `<script>${js}</script></body>`);
-  if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => m + CONSOLE_BRIDGE);
-  else html = CONSOLE_BRIDGE + html;
+  const bridges = CONSOLE_BRIDGE + getVisualEditBridge(visualEdit);
+  if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => m + bridges);
+  else html = bridges + html;
   return html;
 }
 
@@ -527,16 +707,73 @@ function Workspace() {
     };
   }, [dragging]);
 
-  /* ---------- console bridge ---------- */
+  const [visualEditMode, setVisualEditMode] = useState(false);
+  const [codeViewMode, setCodeViewMode] = useState<"syntax" | "edit">("syntax");
+  const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+
+  /* ---------- console bridge & visual edit listener ---------- */
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
-      const d = e.data as { __kenzo?: number; level?: string; text?: string };
-      if (!d || d.__kenzo !== 1) return;
-      setLogs((prev) => [...prev.slice(-199), { id: ++logId.current, level: d.level ?? "log", text: d.text ?? "" }]);
+      const d = e.data as any;
+      if (!d) return;
+      if (d.__kenzo === 1) {
+        setLogs((prev) => [...prev.slice(-199), { id: ++logId.current, level: d.level ?? "log", text: d.text ?? "" }]);
+      }
+      if (d.__kenzo_visual_edit && d.newText) {
+        const oldText = d.oldText;
+        const newText = d.newText;
+        setFiles((current) => {
+          const raw = current["index.html"] || "";
+          if (oldText && raw.includes(oldText)) {
+            const next = raw.replace(oldText, newText);
+            const nextFiles = { ...current, "index.html": next };
+            scheduleSave(nextFiles);
+            toast.success("Visual Edit Saved", {
+              description: `"${oldText.slice(0, 24)}" → "${newText.slice(0, 24)}" updated in code`,
+            });
+            return nextFiles;
+          } else if (oldText) {
+            const trimmedOld = oldText.trim();
+            const decodedOld = trimmedOld
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            if (raw.includes(trimmedOld)) {
+              const next = raw.replace(trimmedOld, newText);
+              const nextFiles = { ...current, "index.html": next };
+              scheduleSave(nextFiles);
+              toast.success("Visual Edit Saved", {
+                description: `"${trimmedOld.slice(0, 24)}" → "${newText.slice(0, 24)}" updated in code`,
+              });
+              return nextFiles;
+            } else if (raw.includes(decodedOld)) {
+              const next = raw.replace(decodedOld, newText);
+              const nextFiles = { ...current, "index.html": next };
+              scheduleSave(nextFiles);
+              toast.success("Visual Edit Saved", {
+                description: `"${trimmedOld.slice(0, 24)}" → "${newText.slice(0, 24)}" updated in code`,
+              });
+              return nextFiles;
+            }
+          }
+          return current;
+        });
+      }
+      if (d.__kenzo_open_publish) {
+        setPublishMenuOpen(true);
+      }
+      if (d.__kenzo_open_github) {
+        setGithubMenuOpen(true);
+      }
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, []);
+
+  useEffect(() => {
+    const iframe = document.querySelector('iframe[title="Preview"]') as HTMLIFrameElement | null;
+    iframe?.contentWindow?.postMessage({ __toggle_visual_edit: visualEditMode }, "*");
+  }, [visualEditMode, previewNonce]);
 
   /* ---------- boot ---------- */
   const wordCount = useMemo(() => (input.trim() ? input.trim().split(/\s+/).length : 0), [input]);
@@ -1349,9 +1586,379 @@ function Workspace() {
   }
 
   function downloadSingleHtml() {
-    triggerDownload(new Blob([buildSrcDoc(files)], { type: "text/html" }), `${projectSlug()}.html`);
+    triggerDownload(new Blob([buildSrcDoc(files, false)], { type: "text/html" }), `${projectSlug()}.html`);
     toast.success("Downloaded single-file HTML");
     setExportOpen(false);
+  }
+
+  function formatCurrentFile() {
+    const raw = files[activeFile];
+    if (!raw) return;
+    try {
+      const lines = raw.split("\n");
+      let indent = 0;
+      const formatted = lines
+        .map((line) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("</") || trimmed.startsWith("}") || trimmed.startsWith("]")) {
+            indent = Math.max(0, indent - 1);
+          }
+          const res = "  ".repeat(indent) + trimmed;
+          if (
+            (trimmed.startsWith("<") &&
+              !trimmed.startsWith("</") &&
+              !trimmed.endsWith("/>") &&
+              !trimmed.includes("</")) ||
+            trimmed.endsWith("{") ||
+            trimmed.endsWith("[")
+          ) {
+            indent++;
+          }
+          return res;
+        })
+        .join("\n");
+      updateFile(activeFile, formatted);
+      toast.success(`Formatted ${activeFile}`);
+    } catch {
+      toast.error("Could not format file");
+    }
+  }
+
+  function openExternalPreview() {
+    const w = window.open("", "_blank");
+    if (!w) {
+      toast.error("Popup blocked — please allow popups for external preview");
+      return;
+    }
+    const currentDoc = buildSrcDoc(files, visualEditMode);
+    const projTitle = projectName || "Kenzo App";
+
+    const externalHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${projTitle} — Live Preview | Kenzo</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0c10;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      height: 54px;
+      background: rgba(18, 20, 29, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 100;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
+      color: #ffffff;
+    }
+    .logo-badge span {
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .project-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: #94a3b8;
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      padding-left: 12px;
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .device-controls {
+      display: flex;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+    .device-btn {
+      background: transparent;
+      border: 0;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .device-btn:hover { color: #fff; }
+    .device-btn.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .actions-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 4px 10px;
+      border-radius: 9999px;
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
+    .publish-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 7px 18px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .publish-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+      opacity: 0.95;
+    }
+    .publish-btn:active {
+      transform: translateY(0);
+    }
+    .preview-canvas {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      overflow: auto;
+      background: radial-gradient(circle at 50% 50%, #151722 0%, #0b0c10 100%);
+    }
+    .frame-wrapper {
+      width: 100%;
+      height: 100%;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #ffffff;
+    }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(6px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-card {
+      background: #181a24;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      max-width: 440px;
+      width: 100%;
+      padding: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6);
+      text-align: left;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .modal-desc { font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px; }
+    .deploy-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .deploy-option:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: #6366f1;
+    }
+    .deploy-btn-text { font-size: 14px; font-weight: 600; color: #fff; }
+    .deploy-btn-sub { font-size: 11px; color: #94a3b8; }
+    .close-btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #94a3b8;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .close-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand-section">
+      <div class="logo-badge">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#6366f1"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        <span>Kenzo</span>
+      </div>
+      <div class="project-name">${projTitle}</div>
+    </div>
+
+    <div class="device-controls">
+      <button class="device-btn active" onclick="setViewport('desktop', this)">Desktop</button>
+      <button class="device-btn" onclick="setViewport('tablet', this)">Tablet (768px)</button>
+      <button class="device-btn" onclick="setViewport('mobile', this)">Mobile (375px)</button>
+    </div>
+
+    <div class="actions-section">
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        <span>Live Staging</span>
+      </div>
+      <button class="publish-btn" onclick="openPublishModal()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+        Publish
+      </button>
+    </div>
+  </header>
+
+  <main class="preview-canvas">
+    <div id="frameWrapper" class="frame-wrapper" style="max-width: 100%;">
+      <iframe id="previewIframe" title="Live Preview"></iframe>
+    </div>
+  </main>
+
+  <div id="publishModal" class="modal-overlay" onclick="if(event.target===this)closePublishModal()">
+    <div class="modal-card">
+      <h3 class="modal-title">Publish & Deploy Website</h3>
+      <p class="modal-desc">Launch your website live worldwide on high-speed global Edge CDN or push directly to GitHub.</p>
+      
+      <div class="deploy-option" onclick="deployNetlify()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#25c2a0" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+        <div>
+          <div class="deploy-btn-text">Publish to Netlify</div>
+          <div class="deploy-btn-sub">Instant global SSL hosting & live public link</div>
+        </div>
+      </div>
+
+      <div class="deploy-option" onclick="deployGithub()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        <div>
+          <div class="deploy-btn-text">Push to GitHub</div>
+          <div class="deploy-btn-sub">Commit all 3 files + README to your GitHub repo</div>
+        </div>
+      </div>
+
+      <button class="close-btn" onclick="closePublishModal()">Close</button>
+    </div>
+  </div>
+
+  <script>
+    var currentDoc = ${JSON.stringify(currentDoc)};
+    var iframe = document.getElementById('previewIframe');
+    iframe.srcdoc = currentDoc;
+
+    function setViewport(device, btn) {
+      document.querySelectorAll('.device-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      var wrapper = document.getElementById('frameWrapper');
+      if (device === 'mobile') {
+        wrapper.style.maxWidth = '375px';
+      } else if (device === 'tablet') {
+        wrapper.style.maxWidth = '768px';
+      } else {
+        wrapper.style.maxWidth = '100%';
+      }
+    }
+
+    function openPublishModal() {
+      document.getElementById('publishModal').style.display = 'flex';
+    }
+
+    function closePublishModal() {
+      document.getElementById('publishModal').style.display = 'none';
+    }
+
+    function deployNetlify() {
+      if (window.opener) {
+        window.opener.postMessage({ __kenzo_open_publish: true }, '*');
+        window.opener.focus();
+        closePublishModal();
+      } else {
+        alert("Please return to the Kenzo editor tab to complete Netlify publication!");
+      }
+    }
+
+    function deployGithub() {
+      if (window.opener) {
+        window.opener.postMessage({ __kenzo_open_github: true }, '*');
+        window.opener.focus();
+        closePublishModal();
+      } else {
+        alert("Please return to the Kenzo editor tab to push to GitHub!");
+      }
+    }
+  </script>
+</body>
+</html>`;
+
+    w.document.open();
+    w.document.write(externalHtml);
+    w.document.close();
   }
 
   async function copyActiveFile() {
@@ -1364,7 +1971,7 @@ function Workspace() {
     navigate({ to: "/", replace: true });
   }
 
-  const srcDoc = useMemo(() => buildSrcDoc(files), [files]);
+  const srcDoc = useMemo(() => buildSrcDoc(files, visualEditMode), [files, visualEditMode]);
   const assets = useMemo(() => collectAssets(files), [files]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1465,6 +2072,28 @@ function Workspace() {
         className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
       />
 
+      {recording && (
+        <div className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-destructive/15 border border-destructive/30 flex items-center justify-between text-xs text-destructive animate-pulse">
+          <span className="flex items-center gap-2 font-medium">
+            <span className="h-2 w-2 rounded-full bg-destructive animate-ping" />
+            Listening... Speak your prompt naturally
+          </span>
+          <button
+            type="button"
+            onClick={() => void stopRecording()}
+            className="px-2 py-0.5 rounded-md bg-destructive text-destructive-foreground font-semibold hover:opacity-90 active:scale-95 text-[11px]"
+          >
+            Done Speaking
+          </button>
+        </div>
+      )}
+      {transcribing && (
+        <div className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-primary/15 border border-primary/30 flex items-center gap-2 text-xs text-primary font-medium animate-pulse">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Transcribing speech with AI...</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-1 px-2.5 pb-2.5">
         <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => { void onPickImages(e.target.files); e.currentTarget.value = ""; }} />
         <IconBtn label="Attach images" onClick={() => fileInputRef.current?.click()}><ImagePlus className="h-4 w-4" /></IconBtn>
@@ -1514,11 +2143,6 @@ function Workspace() {
           {quota && !quota.isAdmin && !quota.hasUserKey && (
             <span className="text-[11px] text-muted-foreground hidden sm:inline">
               Daily: {quota.remaining}/{quota.dailyLimit} free
-            </span>
-          )}
-          {quota && (quota.hasUserKey || quota.isAdmin) && (
-            <span className="text-[11px] text-emerald-500 hidden sm:inline font-medium">
-              Unlimited
             </span>
           )}
           <span className={`text-[11px] tabular-nums ${charCount >= MAX_CHARS ? "text-destructive font-semibold" : charCount > 5500 ? "text-amber-500 font-medium" : "text-muted-foreground"}`}>
@@ -2028,12 +2652,28 @@ function Workspace() {
                   <RefreshCw className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => { const w = window.open("", "_blank"); if (w) { w.document.open(); w.document.write(buildSrcDoc(files)); w.document.close(); } }}
-                  title="Open preview in a new tab" aria-label="Open preview in a new tab"
+                  onClick={openExternalPreview}
+                  title="Open live preview in a new tab with Publish toolbar"
+                  aria-label="Open preview in a new tab"
                   className="p-2 rounded-lg hover:bg-surface transition active:scale-95"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </button>
+                {rightTab === "preview" && (
+                  <button
+                    type="button"
+                    onClick={() => setVisualEditMode((v) => !v)}
+                    title="Visual Editing: Hover and click any text directly on the website preview to edit it live and sync to code"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 border ${
+                      visualEditMode
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-xs ring-1 ring-emerald-500/30 font-semibold"
+                        : "hover:bg-surface text-muted-foreground border-glass-border hover:text-foreground"
+                    }`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Visual Edit</span>
+                  </button>
+                )}
                 <div className="relative">
                   <button onClick={() => setExportOpen((v) => !v)} title="Download" aria-label="Download" className="inline-flex items-center gap-1 p-2 rounded-lg hover:bg-surface transition active:scale-95">
                     {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -2067,53 +2707,186 @@ function Workspace() {
 
           <div className="flex-1 min-h-0 flex flex-col">
             {rightTab === "code" && (
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="flex items-center justify-between gap-2 px-4 border-b border-glass-border">
-                  <div className="flex gap-1 overflow-x-auto">
+              <div className="flex-1 flex flex-col min-h-0 bg-[#1e1e1e] text-[#d4d4d4] font-mono select-none">
+                {/* VS Code Tab Bar */}
+                <div className="flex items-center justify-between gap-2 px-2 bg-[#252526] border-b border-[#333333] shrink-0 h-10">
+                  <div className="flex gap-1 overflow-x-auto h-full">
                     {(["index.html", "styles.css", "script.js"] as const).map((name) => {
-                      const Icon = name === "index.html" ? FileText : name === "styles.css" ? Palette : FileCode;
+                      const isActive = activeFile === name;
                       return (
-                        <button key={name} onClick={() => setActiveFile(name)} className={`inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition ${activeFile === name ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                          <Icon className="h-3.5 w-3.5" /> {name}
+                        <button
+                          key={name}
+                          onClick={() => setActiveFile(name)}
+                          className={`inline-flex items-center gap-2 whitespace-nowrap px-3.5 h-full text-xs font-medium transition cursor-pointer ${
+                            isActive
+                              ? "bg-[#1e1e1e] text-[#ffffff] border-t-2 border-[#007acc] shadow-xs"
+                              : "text-[#969696] hover:text-[#cccccc] hover:bg-[#2a2d2e] border-t-2 border-transparent"
+                          }`}
+                        >
+                          {name === "index.html" ? (
+                            <span className="text-[#e44d26] font-bold text-[11px]">HTML</span>
+                          ) : name === "styles.css" ? (
+                            <span className="text-[#264de4] font-bold text-[11px]">CSS</span>
+                          ) : (
+                            <span className="text-[#f7df1e] font-bold text-[11px]">JS</span>
+                          )}
+                          <span>{name}</span>
                         </button>
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="hidden sm:inline text-[11px] text-muted-foreground tabular-nums">
-                      {files[activeFile].split("\n").length} lines · {(new Blob([files[activeFile]]).size / 1024).toFixed(1)} KB
-                    </span>
-                    <button onClick={copyActiveFile} title="Copy file" aria-label="Copy file" className="p-1.5 rounded-md hover:bg-surface transition text-muted-foreground hover:text-foreground active:scale-95">
+                  <div className="flex items-center gap-1.5 pr-2">
+                    <button
+                      type="button"
+                      onClick={() => setVisualEditMode((v) => !v)}
+                      title="Visual Editing: Click any text directly on the preview to edit in real time"
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-sans font-medium transition active:scale-95 ${
+                        visualEditMode
+                          ? "bg-emerald-500/25 text-emerald-400 border border-emerald-500/40"
+                          : "text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e]"
+                      }`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      <span>Visual Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={formatCurrentFile}
+                      title="Format Code (Prettier indent)"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-sans font-medium text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e] transition active:scale-95"
+                    >
+                      <Wand2 className="h-3 w-3" />
+                      <span className="hidden sm:inline">Format</span>
+                    </button>
+                    <button
+                      onClick={copyActiveFile}
+                      title="Copy file code"
+                      className="p-1.5 rounded text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e] transition active:scale-95"
+                    >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 min-h-0 flex bg-surface overflow-hidden">
-                  <div aria-hidden ref={gutterRef} className="hidden sm:block select-none overflow-hidden border-r border-glass-border px-3 py-4 text-right font-mono text-xs leading-relaxed text-muted-foreground/60">
-                    {editorValue.split("\n").map((_, i) => <div key={i}>{i + 1}</div>)}
+
+                {/* VS Code Breadcrumb navigation */}
+                <div className="px-4 py-1 text-[11px] text-[#858585] bg-[#1e1e1e] border-b border-[#2d2d2d] flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-primary font-medium">kenzo</span>
+                    <span className="text-[#555]">›</span>
+                    <span>src</span>
+                    <span className="text-[#555]">›</span>
+                    <span className="text-[#ffffff] font-semibold flex items-center gap-1">
+                      {activeFile === "index.html" ? (
+                        <span className="text-[#e44d26] text-[10px]">●</span>
+                      ) : activeFile === "styles.css" ? (
+                        <span className="text-[#264de4] text-[10px]">●</span>
+                      ) : (
+                        <span className="text-[#f7df1e] text-[10px]">●</span>
+                      )}
+                      {activeFile}
+                    </span>
                   </div>
-                  <textarea
-                    key={activeFile}
-                    ref={editorRef}
-                    readOnly={isTyping}
-                    value={editorValue}
-                    onChange={(e) => updateFile(activeFile, e.target.value)}
-                    onScroll={(e) => { if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop; }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Tab") {
-                        e.preventDefault();
-                        const el = e.currentTarget;
-                        const s = el.selectionStart;
-                        updateFile(activeFile, files[activeFile].slice(0, s) + "  " + files[activeFile].slice(el.selectionEnd));
-                        requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
-                      }
-                    }}
-                    spellCheck={false}
-                    className={`flex-1 w-full resize-none bg-transparent font-mono text-xs px-4 py-4 outline-none border-0 leading-relaxed ${isTyping ? "caret-primary" : ""}`}
-                    style={{ tabSize: 2 }}
-                  />
+                  <div className="flex items-center gap-2 text-[10px] text-[#858585]">
+                    <span>{(new Blob([files[activeFile]]).size / 1024).toFixed(1)} KB</span>
+                    <span>{files[activeFile].split("\n").length} lines</span>
+                  </div>
                 </div>
 
+                {/* VS Code Editor & Gutter */}
+                <div className="flex-1 min-h-0 flex bg-[#1e1e1e] overflow-hidden relative">
+                  <div
+                    aria-hidden
+                    ref={gutterRef}
+                    className="hidden sm:block select-none overflow-hidden border-r border-[#2d2d2d] px-3 py-4 text-right font-mono text-[12px] leading-relaxed text-[#858585]/70 shrink-0 bg-[#1e1e1e]"
+                  >
+                    {editorValue.split("\n").map((_, i) => (
+                      <div
+                        key={i}
+                        className={cursorPos.line === i + 1 ? "text-[#ffffff] font-bold" : ""}
+                      >
+                        {i + 1}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="relative flex-1 min-h-0 overflow-auto bg-[#1e1e1e]">
+                    {/* Syntax highlight underlay */}
+                    <pre
+                      aria-hidden
+                      className="absolute inset-0 m-0 p-4 font-mono text-[12px] leading-relaxed pointer-events-none whitespace-pre overflow-hidden text-[#d4d4d4]"
+                      dangerouslySetInnerHTML={{
+                        __html: highlightSyntax(editorValue, activeFile),
+                      }}
+                    />
+
+                    {/* Interactive Editor textarea */}
+                    <textarea
+                      key={activeFile}
+                      ref={editorRef}
+                      readOnly={isTyping}
+                      value={editorValue}
+                      onChange={(e) => updateFile(activeFile, e.target.value)}
+                      onScroll={(e) => {
+                        if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+                        const pre = e.currentTarget.previousElementSibling as HTMLElement | null;
+                        if (pre) {
+                          pre.scrollTop = e.currentTarget.scrollTop;
+                          pre.scrollLeft = e.currentTarget.scrollLeft;
+                        }
+                      }}
+                      onKeyUp={(e) => {
+                        const s = e.currentTarget.selectionStart;
+                        const lines = e.currentTarget.value.slice(0, s).split("\n");
+                        setCursorPos({ line: lines.length, col: lines[lines.length - 1].length + 1 });
+                      }}
+                      onClick={(e) => {
+                        const s = e.currentTarget.selectionStart;
+                        const lines = e.currentTarget.value.slice(0, s).split("\n");
+                        setCursorPos({ line: lines.length, col: lines[lines.length - 1].length + 1 });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Tab") {
+                          e.preventDefault();
+                          const el = e.currentTarget;
+                          const s = el.selectionStart;
+                          updateFile(activeFile, files[activeFile].slice(0, s) + "  " + files[activeFile].slice(el.selectionEnd));
+                          requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
+                        }
+                      }}
+                      spellCheck={false}
+                      className="absolute inset-0 w-full h-full resize-none bg-transparent font-mono text-[12px] p-4 outline-none border-0 leading-relaxed text-transparent caret-white selection:bg-[#264f78] selection:text-white"
+                      style={{ tabSize: 2 }}
+                    />
+                  </div>
+                </div>
+
+                {/* VS Code Status Bar (Footer) */}
+                <div className="h-6 bg-[#007acc] text-white flex items-center justify-between px-3 text-[11px] font-sans select-none shrink-0 font-medium">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1 font-mono text-[10px]">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                      main
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setVisualEditMode((v) => !v)}
+                      className="flex items-center gap-1 hover:underline cursor-pointer"
+                      title="Visual Editing: Click any text directly on the website to edit"
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                      <span>Visual Edit: {visualEditMode ? "ON" : "OFF"}</span>
+                    </button>
+                    <span>0 errors</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-[10px] font-mono">
+                    <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
+                    <span className="hidden sm:inline">Spaces: 2</span>
+                    <span className="hidden sm:inline">UTF-8</span>
+                    <span className="font-bold">
+                      {activeFile === "index.html" ? "HTML" : activeFile === "styles.css" ? "CSS" : "JavaScript"}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -2161,15 +2934,77 @@ function Workspace() {
             )}
 
             {rightTab === "preview" && (
-              <div className="flex-1 min-h-0 flex items-start justify-center overflow-auto bg-surface p-0 md:p-4">
-                <div className="h-full w-full bg-white md:rounded-xl md:shadow-lift overflow-hidden transition-all duration-300" style={{ maxWidth: device === "mobile" ? 390 : device === "tablet" ? 820 : "100%" }}>
-                  <iframe
-                    key={previewNonce}
-                    title="Preview"
-                    srcDoc={srcDoc}
-                    sandbox="allow-scripts allow-forms allow-modals allow-popups"
-                    className="w-full h-full border-0 bg-white"
-                  />
+              <div className="flex-1 min-h-0 flex flex-col bg-surface overflow-hidden relative">
+                <div className="flex-1 min-h-0 flex items-start justify-center overflow-auto p-0 md:p-4">
+                  <div
+                    className="h-full w-full bg-white md:rounded-xl md:shadow-lift overflow-hidden transition-all duration-300 relative"
+                    style={{ maxWidth: device === "mobile" ? 390 : device === "tablet" ? 820 : "100%" }}
+                  >
+                    <iframe
+                      key={previewNonce}
+                      title="Preview"
+                      srcDoc={srcDoc}
+                      sandbox="allow-scripts allow-forms allow-modals allow-popups"
+                      className="w-full h-full border-0 bg-white"
+                      onLoad={(e) => {
+                        try {
+                          (e.currentTarget as HTMLIFrameElement)?.contentWindow?.postMessage(
+                            { __toggle_visual_edit: visualEditMode },
+                            "*"
+                          );
+                        } catch {}
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Bottom preview status & visual editing bar */}
+                <div className="shrink-0 h-9 px-3 glass border-t border-glass-border flex items-center justify-between text-xs select-none">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVisualEditMode((v) => !v)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
+                        visualEditMode
+                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-xs"
+                          : "text-muted-foreground hover:text-foreground hover:bg-surface border border-transparent"
+                      }`}
+                      title="Toggle Visual Editing on the website preview"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      <span>{visualEditMode ? "Visual Edit: ON" : "Visual Edit: OFF"}</span>
+                    </button>
+                    {visualEditMode ? (
+                      <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Hover any text element to edit · Auto-saves to code
+                      </span>
+                    ) : (
+                      <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        Click "Visual Edit" to edit any text directly on the preview
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRightTab("code")}
+                      className="text-[11px] text-muted-foreground hover:text-foreground hover:underline inline-flex items-center gap-1"
+                      title="Switch to VS Code editor view"
+                    >
+                      <Code2 className="h-3 w-3" />
+                      <span className="hidden sm:inline">View in Code</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openExternalPreview}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-semibold bg-gradient-to-r from-primary to-accent text-white shadow-xs hover:opacity-95 transition active:scale-95 cursor-pointer"
+                      title="Open full staging preview with Publish toolbar"
+                    >
+                      <Rocket className="h-3 w-3" />
+                      <span>Publish & Share</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

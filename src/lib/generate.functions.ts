@@ -113,6 +113,18 @@ IMAGES — MANDATORY, MUST ACTUALLY LOAD
 SCROLL EXPERIENCE
 - Add a slim fixed scroll-progress bar at the very top of the page (a div filled from script.js on scroll), plus smooth scrolling, scroll-reveal via IntersectionObserver, and a sticky header that condenses on scroll. Keep it subtle and professional, and disable motion under prefers-reduced-motion.
 - Keep the code clean, commented where non-obvious, and free of dead code.
+
+GOOGLE MAPS & REAL BUSINESS DATA EXTRACTION:
+- When the user pastes raw text from Google Maps, Apple Maps, Yelp, or business listings:
+  • Automatically parse the business metadata: Name, Category/Type, Star Rating, Review Count, Full Address, Opening/Closing Hours, Phone Number, Amenities/Attributes, and Customer Review Snippets.
+  • NEVER discard or replace real pasted business details with placeholder names or generic text. Every real datum (name, phone, address, hours, reviews) MUST appear authentically on the page!
+  • Construct an elite, high-converting digital storefront & web app for this exact business:
+    1. Hero Showcase: Business name, verified Google Maps badge, real star rating (interactive stars + review count), category badges, and quick CTA buttons ("Get Directions", "Call Now", "Reserve / Order").
+    2. Dynamic Open/Closed Status: In script.js, calculate whether the business is currently open or closed based on the pasted operating hours and client local time, displaying a real-time glowing "Open Now" or "Closed" badge.
+    3. Interactive Location & Map Card: Stylized responsive map section with the exact address, 1-click "Copy Address" button, transit directions, and embedded interactive map (using https://maps.google.com/maps?q=ADDRESS&output=embed).
+    4. Real Reviews Carousel: Feature the actual user reviews pasted, formatted into quote cards with star ratings, reviewer avatars, and helpfulness metrics.
+    5. Menu / Services / Booking: Present their real offerings with price pills, filtering, and a smooth booking / inquiry modal.
+    6. Micro-animations: Smooth scroll-reveal, interactive hover effects, and modern glassmorphism.
 `;
 
 const Input = z.object({
