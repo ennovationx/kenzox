@@ -69,6 +69,12 @@ One durable preference per line that you learned about this user (e.g. "prefers 
 
 index.html
 - Start with <!doctype html>. Include <meta charset="utf-8">, <meta name="viewport" content="width=device-width, initial-scale=1">, a descriptive <title> and <meta name="description">.
+- WEBSITE MAIN ICON & FAVICON (MANDATORY):
+  • In <head>, ALWAYS include a website favicon using a crisp SVG data URI tailored to the theme:
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    (Pick an emoji or icon symbol directly representing the site, e.g. ⚡, ☕, 💼, 💎, 🛒, 🎨, 🎵, 🩺, 🌿).
+  • In the header / navbar, ALWAYS render a prominent main brand icon right beside the site title:
+    <div class="logo"><span class="logo-icon material-symbols-rounded">rocket_launch</span> <span class="logo-text">AppName</span></div>
 - Link assets exactly as: <link rel="stylesheet" href="styles.css"> in <head> and <script src="script.js" defer></script> before </body>.
 - Semantic HTML: header/nav/main/section/footer, one <h1>, labels tied to inputs, alt text, aria-labels on icon-only buttons.
 - Do NOT output CSS or JavaScript code directly inside index.html outside of normal tags. Keep styles in styles.css and scripts in script.js.
@@ -220,6 +226,11 @@ function parseResult(raw: string): {
     html = cleanCodeBlock(html, "html");
     css = cleanCodeBlock(css, "css");
     js = cleanCodeBlock(js, "js");
+
+    // Ensure website has a main favicon icon in <head>
+    if (html && !html.includes('rel="icon"') && !html.includes("rel='icon'")) {
+      html = html.replace(/<head[^>]*>/i, (m) => `${m}\n  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">`);
+    }
 
     // Clean summary from code leakage
     if (summary) {

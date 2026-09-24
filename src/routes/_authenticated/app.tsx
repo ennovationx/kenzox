@@ -7,6 +7,8 @@ import { Avatars, ShareDialog } from "@/components/ShareDialog";
 import { PublishMenu } from "@/components/PublishMenu";
 import { GithubMenu } from "@/components/GithubMenu";
 import { getGithubConnection, pushProjectToGithub } from "@/lib/github.functions";
+import { getNetlifyConnection, publishProject } from "@/lib/netlify.functions";
+import { getGiveawayQuota } from "@/lib/user-keys.functions";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { generateCode } from "@/lib/generate.functions";
@@ -18,7 +20,7 @@ import {
   FileCode, Palette, FileText, Loader2, Menu, X, Sparkles, Search, Share2,
   Monitor, Tablet, Smartphone, ChevronDown, FileArchive, Copy, Mic, Square,
   ImagePlus, Terminal, History, ThumbsUp, ThumbsDown, Pencil, Check, Hammer,
-  ClipboardList, Image as ImageIcon, MessageSquare, FolderTree, Camera,
+  ClipboardList, Image as ImageIcon, MessageSquare, FolderTree, Camera, AlertTriangle,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -53,7 +55,7 @@ const DEFAULT_FILES: Files = {
   "script.js": `console.log("Kenzo ready");`,
 };
 
-const MAX_WORDS = 6000;
+const MAX_CHARS = 6000;
 
 const CONSOLE_BRIDGE = `<script>(function(){
   var send=function(level,args){try{parent.postMessage({__kenzo:1,level:level,text:Array.prototype.map.call(args,function(a){
@@ -206,6 +208,30 @@ function Workspace() {
   const [githubRepoUrl, setGithubRepoUrl] = useState<string | null>(null);
   const [githubRepoName, setGithubRepoName] = useState<string | null>(null);
 
+  const fetchQuota = useServerFn(getGiveawayQuota);
+  const checkNetlifyConnection = useServerFn(getNetlifyConnection);
+  const publishToNetlifyServerFn = useServerFn(publishProject);
+  const [quota, setQuota] = useState<{
+    isAdmin: boolean;
+    hasUserKey: boolean;
+    remaining: number;
+    dailyLimit: number;
+  } | null>(null);
+  const [publishMenuOpen, setPublishMenuOpen] = useState(false);
+  const [livePublishUrl, setLivePublishUrl] = useState<string | null>(null);
+
+  const refreshQuota = useCallback(async () => {
+    if (!user) return;
+    try {
+      const q = await fetchQuota();
+      setQuota(q);
+    } catch {}
+  }, [user, fetchQuota]);
+
+  useEffect(() => {
+    void refreshQuota();
+  }, [refreshQuota]);
+
   async function handleGithubPushed(repoUrl: string, repoFullName: string) {
     setGithubRepoUrl(repoUrl);
     setGithubRepoName(repoFullName);
@@ -215,6 +241,20 @@ function Workspace() {
       id: crypto.randomUUID(),
       role: "assistant",
       content: `🎉 **Successfully pushed to GitHub!**\n\nHere is your live GitHub repository URL:\n🔗 [${repoUrl}](${repoUrl})\n\n• **Repository:** \`${repoFullName}\`\n• **Clone Command:**\n\`\`\`bash\ngit clone ${repoUrl}.git\n\`\`\`\n• All files (\`index.html\`, \`styles.css\`, \`script.js\`, and \`README.md\`) have been synchronized to GitHub.`,
+      mode: "build",
+    };
+    setMessages((m) => [...m, asst]);
+    await persistMsg(activeId, asst);
+  }
+
+  async function handleWebsitePublished(url: string) {
+    setLivePublishUrl(url);
+    if (!activeId) return;
+
+    const asst: Msg = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: `🎉 **Website successfully deployed and live!**\n\nHere is your live website URL:\n🔗 [${url}](${url})\n\n• **Live URL:** \`${url}\`\n• **Hosting:** Netlify Edge CDN (Global, SSL Secured)\n• Your project is live worldwide! You can ask me to re-deploy or update it anytime.`,
       mode: "build",
     };
     setMessages((m) => [...m, asst]);
@@ -590,6 +630,119 @@ function Workspace() {
     await persistMsg(projectId, userMsg);
 
     try {
+      const isSidebarRequest =
+        /\b(open|show|toggle)\b.*\b(sidebar|menu|projects?\s*list|drawer)\b/i.test(prompt) ||
+        /^(show|open)\s+(the\s+)?(sidebar|projects|menu)$/i.test(prompt.trim()) ||
+        /^(sidebar|projects?\s*list)$/i.test(prompt.trim());
+
+      if (isSidebarRequest) {
+        setSidebarOpen(true);
+        if (sidebarCollapsed) setSidebarCollapsed(false);
+        const asst: Msg = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `I've opened the sidebar for you! Here you can browse and search your projects, create new ones, or access your settings.`,
+          mode: "build",
+        };
+        setMessages((m) => [...m, asst]);
+        await persistMsg(projectId, asst);
+        stopSteps();
+        setBusy(false);
+        return;
+      }
+
+      const isDeployRequest =
+        /\b(deploy|publish|host|launch|go live)\b.*\b(website|site|app|project|netlify)?\b/i.test(prompt) ||
+        /\b(netlify)\b.*\b(deploy|publish|url|link)\b/i.test(prompt) ||
+        /\b(give|show|what is|get|where is)\b.*\b(live|publish(ed)?|deploy(ed)?)\b.*\b(url|link|site|website)\b/i.test(prompt);
+
+      if (isDeployRequest) {
+        if (livePublishUrl && /\b(url|link|what is|give|show|where)\b/i.test(prompt) && !/\b(re-deploy|re-publish|deploy|publish)\b/i.test(prompt)) {
+          const asst: Msg = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `Here is your live website URL:\n🔗 [${livePublishUrl}](${livePublishUrl})\n\n• **Status:** Published & Live Worldwide`,
+            mode: "build",
+          };
+          setMessages((m) => [...m, asst]);
+          await persistMsg(projectId, asst);
+          stopSteps();
+          setBusy(false);
+          return;
+        }
+
+        try {
+          const netlifyConn = (await checkNetlifyConnection()) as { connected: boolean };
+          if (!netlifyConn.connected) {
+            setPublishMenuOpen(true);
+            const asst: Msg = {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: `⚠️ **Netlify is not connected yet.**\n\nTo publish your website to a live URL:\n1. Click **Connect Netlify** in the dialog that just opened (or visit **Settings → Deployments & GitHub**).\n2. Once connected, prompt me: **"deploy website"**, and I will instantly publish your site and provide your live URL!`,
+              mode: "build",
+            };
+            setMessages((m) => [...m, asst]);
+            await persistMsg(projectId, asst);
+            return;
+          }
+
+          toast.info("Deploying website to Netlify...");
+          const res = await publishToNetlifyServerFn({ data: { projectId } });
+          const url = res?.url ?? null;
+          if (url) setLivePublishUrl(url);
+
+          toast.success("Website is live!", {
+            description: url ?? undefined,
+            action: url
+              ? {
+                  label: "Open Site",
+                  onClick: () => window.open(url, "_blank"),
+                }
+              : undefined,
+          });
+
+          const asst: Msg = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `🎉 **Website successfully deployed and live!**\n\nHere is your live website URL:\n🔗 [${url}](${url})\n\n• **Live URL:** \`${url}\`\n• **Hosting:** Netlify Edge CDN (Global, SSL Secured)\n• All files (\`index.html\`, \`styles.css\`, \`script.js\`) are deployed. You can re-deploy anytime by asking me to **"deploy website"**!`,
+            mode: "build",
+          };
+          setMessages((m) => [...m, asst]);
+          await persistMsg(projectId, asst);
+          return;
+        } catch (netErr: any) {
+          const errMsg = netErr?.message || "Failed to deploy website";
+          toast.error(errMsg);
+          const asst: Msg = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `⚠️ **Deployment encountered an issue:** ${errMsg}\n\nYou can also click the rocket icon in the header toolbar to check deploy history or reconfigure settings.`,
+            mode: "build",
+          };
+          setMessages((m) => [...m, asst]);
+          await persistMsg(projectId, asst);
+          return;
+        } finally {
+          stopSteps();
+          setBusy(false);
+          inputRef.current?.focus();
+        }
+      }
+
+      if (quota && !quota.isAdmin && !quota.hasUserKey && quota.remaining <= 0) {
+        const asst: Msg = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `⚠️ **Daily Prompt Limit Reached (3/3 Free Prompts Used)**\n\nTo continue building without limits, please add your free personal Gemini API key in **Settings → API Keys & Giveaway**.\n\nPersonal keys are 100% free from Google AI Studio and grant unlimited daily builds!`,
+          mode: "build",
+        };
+        setMessages((m) => [...m, asst]);
+        await persistMsg(projectId, asst);
+        stopSteps();
+        setBusy(false);
+        return;
+      }
+
       const isGithubPushRequest =
         /\b(push|sync|export|upload|commit|send)\b.*\b(github|repo|repository)\b/i.test(prompt) ||
         /\b(github)\b.*\b(push|sync|export|repo|repository|url|link)\b/i.test(prompt) ||
@@ -755,6 +908,14 @@ function Workspace() {
     e?.preventDefault();
     const prompt = input.trim();
     if (!prompt || busy || !user) return;
+    if (isQuotaExhausted) {
+      toast.info("Daily prompt limit reached (3/3). Add your free Gemini API key in Settings to enjoy unlimited building!");
+      return;
+    }
+    if (prompt.length > MAX_CHARS) {
+      toast.error(`Prompt exceeds maximum limit of ${MAX_CHARS.toLocaleString()} characters.`);
+      return;
+    }
     if (!draft && !canEdit) return toast.error("You have view-only access to this project.");
     const imgs = attachments;
     setInput("");
@@ -866,6 +1027,19 @@ function Workspace() {
       if (picked.length) {
         setAttachments((a) => [...a, ...picked].slice(0, 4));
         toast.info("Image pasted from clipboard");
+      }
+      return;
+    }
+
+    const pastedText = e.clipboardData?.getData("text");
+    if (pastedText && pastedText.length + input.length > MAX_CHARS) {
+      e.preventDefault();
+      const allowed = Math.max(0, MAX_CHARS - input.length);
+      if (allowed > 0) {
+        setInput((prev) => prev + pastedText.slice(0, allowed));
+        toast.info(`Pasted text clamped to ${MAX_CHARS.toLocaleString()} character limit.`);
+      } else {
+        toast.error(`Character limit of ${MAX_CHARS.toLocaleString()} reached.`);
       }
     }
   }
@@ -1004,14 +1178,30 @@ function Workspace() {
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  const words = input.trim() ? input.trim().split(/\s+/).length : 0;
-  const overLimit = words > MAX_WORDS;
+  const charCount = input.length;
+  const overLimit = charCount > MAX_CHARS;
+  const isQuotaExhausted = Boolean(quota && !quota.isAdmin && !quota.hasUserKey && quota.remaining <= 0);
 
   const composer = (
     <form
       onSubmit={send}
       className={`rounded-2xl glass-strong border border-glass-border shadow-lift transition-all duration-300 ${modeFx ? "scale-[0.985] opacity-70" : "scale-100 opacity-100"} ${mode === "plan" ? "ring-1 ring-primary/30" : ""}`}
     >
+      {isQuotaExhausted && (
+        <div className="mx-3 mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-amber-500 font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Daily free limit reached (3/3 prompts used). Add your free Gemini API key in Settings to enjoy unlimited prompts!</span>
+          </div>
+          <Link
+            to="/settings"
+            className="shrink-0 px-3 py-1.5 rounded-lg gradient-brand text-primary-foreground font-semibold hover:opacity-90 transition active:scale-95 text-xs"
+          >
+            Add Key
+          </Link>
+        </div>
+      )}
+
       {attachments.length > 0 && (
         <div className="flex gap-2 flex-wrap px-3 pt-3">
           {attachments.map((src, i) => (
@@ -1039,14 +1229,26 @@ function Workspace() {
       <textarea
         ref={inputRef}
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        maxLength={MAX_CHARS}
+        disabled={busy || isQuotaExhausted}
+        onChange={(e) => {
+          if (e.target.value.length <= MAX_CHARS) {
+            setInput(e.target.value);
+          }
+        }}
         onPaste={handlePaste}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
         }}
         rows={3}
-        placeholder={mode === "plan" ? "Describe the idea — Kenzo will plan it first…" : "Describe what to build or change… (you can paste images)"}
-        className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm outline-none placeholder:text-muted-foreground"
+        placeholder={
+          isQuotaExhausted
+            ? "Daily free prompt limit reached. Add your Gemini API key in Settings to continue…"
+            : mode === "plan"
+            ? "Describe the idea — Kenzo will plan it first…"
+            : "Describe what to build or change… (you can paste images)"
+        }
+        className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
       />
 
       <div className="flex items-center gap-1 px-2.5 pb-2.5">
@@ -1094,14 +1296,28 @@ function Workspace() {
           )}
         </div>
 
-        <span className={`ml-auto text-[11px] tabular-nums ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>
-          {words > 0 ? `${words.toLocaleString()} / ${MAX_WORDS.toLocaleString()}` : ""}
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          {quota && !quota.isAdmin && !quota.hasUserKey && (
+            <span className="text-[11px] text-muted-foreground hidden sm:inline">
+              Daily: {quota.remaining}/{quota.dailyLimit} free
+            </span>
+          )}
+          {quota && (quota.hasUserKey || quota.isAdmin) && (
+            <span className="text-[11px] text-emerald-500 hidden sm:inline font-medium">
+              Unlimited
+            </span>
+          )}
+          <span className={`text-[11px] tabular-nums ${charCount >= MAX_CHARS ? "text-destructive font-semibold" : charCount > 5500 ? "text-amber-500 font-medium" : "text-muted-foreground"}`}>
+            {charCount > 0 ? `${charCount.toLocaleString()} / ${MAX_CHARS.toLocaleString()} chars` : ""}
+            {charCount >= MAX_CHARS ? " (Max)" : ""}
+          </span>
+        </div>
 
         <button
           type="submit"
-          disabled={busy || !input.trim() || overLimit}
+          disabled={busy || !input.trim() || overLimit || isQuotaExhausted}
           aria-label="Send message"
+          title={isQuotaExhausted ? "Daily giveaway prompt limit reached" : "Send message"}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg gradient-brand text-primary-foreground shadow-lift transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -1110,14 +1326,12 @@ function Workspace() {
     </form>
   );
 
-
-
   return (
     <div className="h-screen w-screen flex overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && <div className="fixed inset-0 z-[105] bg-background/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
       <aside
-        className={`fixed lg:static z-[110] top-0 h-full glass-strong border-r border-glass-border transition-all duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 flex flex-col ${sidebarCollapsed ? "w-16" : "w-72"}`}
+        className={`fixed lg:static z-[110] top-0 h-full glass-strong border-r border-glass-border transition-all duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 flex flex-col w-72 sm:w-80 max-w-[85vw] ${sidebarCollapsed ? "lg:w-16" : "lg:w-72"}`}
       >
         <div className="p-4 flex items-center justify-between gap-2 border-b border-glass-border/60">
           <button
@@ -1128,51 +1342,58 @@ function Workspace() {
             <Logo showWordmark={!sidebarCollapsed} />
           </button>
           <div className="lg:hidden flex items-center gap-2">
-            <Logo showWordmark={false} />
+            <Logo showWordmark={true} />
           </div>
           <button className="lg:hidden p-2 rounded-lg hover:bg-surface text-muted-foreground hover:text-foreground transition" onClick={() => setSidebarOpen(false)} aria-label="Close menu"><X className="h-4 w-4" /></button>
         </div>
 
         <button
-          onClick={startDraft}
+          onClick={() => { startDraft(); setSidebarOpen(false); }}
           title="New project"
-          className={`mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-lg gradient-brand py-2 text-sm font-medium text-primary-foreground shadow-lift hover:opacity-90 transition active:scale-[0.98] ${sidebarCollapsed ? "px-0" : "px-3"}`}
+          className={`mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-lg gradient-brand py-2 text-sm font-medium text-primary-foreground shadow-lift hover:opacity-90 transition active:scale-[0.98] ${sidebarCollapsed ? "lg:px-0" : "px-3"}`}
         >
-          <Plus className="h-4 w-4" /> {!sidebarCollapsed && <span>New project</span>}
+          <Plus className="h-4 w-4" /> <span className={sidebarCollapsed ? "lg:hidden" : ""}>New project</span>
         </button>
 
-        {!sidebarCollapsed && (
-          <div className="px-3 pb-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search projects"
-                className="w-full rounded-lg bg-input border border-border pl-8 pr-3 py-1.5 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
+        <div className={`px-3 pb-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search projects"
+              className="w-full rounded-lg bg-input border border-border pl-8 pr-3 py-1.5 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
           </div>
-        )}
+        </div>
 
         <div className="flex-1 overflow-auto px-2">
-          {!sidebarCollapsed && draft && (
-            <div className="flex items-center gap-2 rounded-lg mb-1 px-3 py-2 text-sm bg-primary/10 text-muted-foreground italic">
+          {draft && (
+            <div className={`flex items-center gap-2 rounded-lg mb-1 px-3 py-2 text-sm bg-primary/10 text-muted-foreground italic ${sidebarCollapsed ? "lg:hidden" : ""}`}>
               <Sparkles className="h-3.5 w-3.5 text-primary" /> Untitled draft
             </div>
           )}
-          {!sidebarCollapsed && filtered.length === 0 && !draft && (
-            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+          {filtered.length === 0 && !draft && (
+            <div className={`px-4 py-6 text-center text-sm text-muted-foreground ${sidebarCollapsed ? "lg:hidden" : ""}`}>
               {query ? "No projects match that search." : "No projects yet. Create your first one!"}
             </div>
           )}
-          {!sidebarCollapsed && filtered.map((p) => (
-            <div key={p.id} className={`group flex items-center gap-1 rounded-lg mb-1 transition ${activeId === p.id && !draft ? "bg-primary/10" : "hover:bg-surface"}`}>
-              <button onClick={() => openProject(p)} className="flex-1 text-left px-3 py-2 text-sm truncate">
-                {p.name}
+          {filtered.map((p) => (
+            <div key={p.id} className={`group flex items-center gap-1 rounded-lg mb-1 transition ${activeId === p.id && !draft ? "bg-primary/10 text-primary font-medium" : "hover:bg-surface text-foreground"}`}>
+              <button
+                onClick={() => { openProject(p); setSidebarOpen(false); }}
+                className={`flex-1 text-left px-3 py-2 text-sm truncate flex items-center gap-2 ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
+                title={p.name}
+              >
+                <FileCode className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary transition" />
+                <span className={`truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>{p.name}</span>
               </button>
               {p.user_id === user?.id && (
-                <button onClick={() => setDeleteTarget({ id: p.id, name: p.name })} aria-label={`Delete ${p.name}`} className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-muted-foreground hover:text-destructive transition">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: p.id, name: p.name }); }}
+                  aria-label={`Delete ${p.name}`}
+                  className={`opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-muted-foreground hover:text-destructive transition ${sidebarCollapsed ? "lg:hidden" : ""}`}
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -1181,14 +1402,25 @@ function Workspace() {
         </div>
 
         <div className="p-3 border-t border-glass-border space-y-1">
-          {!sidebarCollapsed && (
-            <div className="px-2 py-2 text-xs font-medium text-muted-foreground truncate">{profile?.display_name || "My Account"}</div>
-          )}
-          <Link to="/settings" title="Settings" className={`flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "justify-center px-0" : "px-3"}`}>
-            <Settings className="h-4 w-4" /> {!sidebarCollapsed && <span>Settings</span>}
+          <div className={`px-2 py-2 text-xs font-medium text-muted-foreground truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+            {profile?.display_name || "My Account"}
+          </div>
+          <Link
+            to="/settings"
+            title="Settings"
+            onClick={() => setSidebarOpen(false)}
+            className={`flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "lg:justify-center lg:px-0 px-3" : "px-3"}`}
+          >
+            <Settings className="h-4 w-4 shrink-0" />
+            <span className={sidebarCollapsed ? "lg:hidden" : ""}>Settings</span>
           </Link>
-          <button onClick={signOut} title="Log out" className={`w-full flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "justify-center px-0" : "px-3"}`}>
-            <LogOut className="h-4 w-4" /> {!sidebarCollapsed && <span>Log out</span>}
+          <button
+            onClick={() => { signOut(); setSidebarOpen(false); }}
+            title="Log out"
+            className={`w-full flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "lg:justify-center lg:px-0 px-3" : "px-3"}`}
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span className={sidebarCollapsed ? "lg:hidden" : ""}>Log out</span>
           </button>
         </div>
       </aside>
@@ -1487,7 +1719,12 @@ function Workspace() {
                   onOpenChange={setGithubMenuOpen}
                   onPushed={handleGithubPushed}
                 />
-                <PublishMenu projectId={activeId} />
+                <PublishMenu
+                  projectId={activeId}
+                  isOpen={publishMenuOpen}
+                  onOpenChange={setPublishMenuOpen}
+                  onPublished={handleWebsitePublished}
+                />
                 {rightTab === "preview" && (
                   <div className="hidden md:flex gap-1 rounded-lg bg-input p-1 mr-1">
                     {([["desktop", Monitor, "Desktop"], ["tablet", Tablet, "Tablet"], ["mobile", Smartphone, "Mobile"]] as const).map(([key, Icon, label]) => (

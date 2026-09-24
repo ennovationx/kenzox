@@ -18,8 +18,23 @@ function notifyBrowser(title: string, body: string) {
   } catch { /* ignore */ }
 }
 
-export function PublishMenu({ projectId }: { projectId: string | null }) {
-  const [open, setOpen] = useState(false);
+export function PublishMenu({
+  projectId,
+  isOpen,
+  onOpenChange,
+  onPublished,
+}: {
+  projectId: string | null;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onPublished?: (url: string) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isOpen !== undefined ? isOpen : internalOpen;
+  const setOpen = (val: boolean) => {
+    setInternalOpen(val);
+    onOpenChange?.(val);
+  };
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,6 +93,9 @@ export function PublishMenu({ projectId }: { projectId: string | null }) {
     try {
       const res = await publishProject({ data: { projectId } });
       setLiveUrl(res?.url ?? null);
+      if (res?.url) {
+        onPublished?.(res.url);
+      }
       toast.success("Published", { description: res?.url ?? undefined });
       notifyBrowser("Your site is live", res?.url ?? "Deploy finished");
       setOpen(true);
