@@ -197,7 +197,9 @@ function Workspace() {
   const [busy, setBusy] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("kenzo:sidebarCollapsed") === "true"; } catch { return false; }
+  });
   const [query, setQuery] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -245,6 +247,11 @@ function Workspace() {
     const saved = Number(localStorage.getItem("kenzo:chatWidth"));
     if (saved >= 280 && saved <= 900) setChatWidth(saved);
   }, []);
+
+  /* ---------- persist sidebar collapsed ---------- */
+  useEffect(() => {
+    try { localStorage.setItem("kenzo:sidebarCollapsed", String(sidebarCollapsed)); } catch {}
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -343,6 +350,17 @@ function Workspace() {
           toast.info("Access requested — the owner has been notified.");
         } catch { toast.error("That project link is not available."); }
       }
+
+      // Restore last session: remember open project or fresh draft across reloads
+      const remembered = localStorage.getItem("kenzo:activeProject");
+      if (remembered === "draft") {
+        startDraft();
+        return;
+      }
+      if (remembered) {
+        const found = list.find((x) => x.id === remembered);
+        if (found) { openProject(found); return; }
+      }
       if (list.length) openProject(list[0]);
       else startDraft();
     })();
@@ -374,6 +392,7 @@ function Workspace() {
     setMessages((data ?? []) as Msg[]);
     setSidebarOpen(false);
     setPreviewNonce((n) => n + 1);
+    try { localStorage.setItem("kenzo:activeProject", p.id); } catch {}
   }
 
   /** A new project lives only in memory until the first prompt is sent. */
@@ -390,6 +409,7 @@ function Workspace() {
     setFiles(DEFAULT_FILES);
     setLogs([]);
     setSidebarOpen(false);
+    try { localStorage.setItem("kenzo:activeProject", "draft"); } catch {}
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
@@ -500,6 +520,7 @@ function Workspace() {
       setProjects((prev) => [row, ...prev]);
       setActiveId(row.id);
       setDraft(false);
+      try { localStorage.setItem("kenzo:activeProject", row.id); } catch {}
     }
 
     const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: prompt, mode, attachments: imgs };

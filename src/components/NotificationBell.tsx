@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Bell, Check, Inbox, X } from "lucide-react";
 
@@ -25,6 +26,7 @@ export function NotificationBell({ userId }: { userId: string | null }) {
   /** Ids already marked read in this session — never counted again, even if a
    *  realtime refresh briefly returns a stale row. */
   const seen = useRef<Set<string>>(new Set());
+  const bellRef = useRef<HTMLButtonElement | null>(null);
 
   const unread = items.filter((n) => !n.read && !seen.current.has(n.id)).length;
 
@@ -74,23 +76,11 @@ export function NotificationBell({ userId }: { userId: string | null }) {
     }
   }
 
-  return (
-    <>
-      <button
-        onClick={toggle}
-        aria-label={unread ? `${unread} unread notifications` : "Notifications"}
-        className="relative p-2 rounded-lg hover:bg-surface transition active:scale-95"
-      >
-        <Bell className="h-4 w-4" />
-        {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold grid place-items-center">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-[200]" role="dialog" aria-label="Notifications">
+  // Portal-rendered panel: escapes all parent stacking contexts (e.g. glass
+  // backdrop-filter) so it renders on top of the chat composer and everything else.
+  const panel = open
+    ? createPortal(
+        <div className="fixed inset-0 z-[9999]" role="dialog" aria-label="Notifications">
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
           <div className="absolute right-3 top-16 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl glass-strong border border-glass-border shadow-lift overflow-hidden animate-fade-in-up">
             <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border bg-background/80">
@@ -130,8 +120,27 @@ export function NotificationBell({ userId }: { userId: string | null }) {
               ))}
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <>
+      <button
+        ref={bellRef}
+        onClick={toggle}
+        aria-label={unread ? `${unread} unread notifications` : "Notifications"}
+        className="relative p-2 rounded-lg hover:bg-surface transition active:scale-95"
+      >
+        <Bell className="h-4 w-4" />
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold grid place-items-center">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </button>
+      {panel}
     </>
   );
 }
