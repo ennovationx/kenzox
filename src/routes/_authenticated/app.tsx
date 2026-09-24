@@ -625,6 +625,9 @@ function Workspace() {
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [backgroundGeneratingProjectId, setBackgroundGeneratingProjectId] = useState<string | null>(null);
+  const activeIdRef = useRef<string | null>(activeId);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
   const shuffleIdeas = useCallback(() => {
     const total = PROMPT_IDEAS.length;
@@ -646,6 +649,7 @@ function Workspace() {
     stepTimer.current = null;
     tickTimer.current = null;
     setBusy(false);
+    setBackgroundGeneratingProjectId(null);
     setTyping(null);
     toast.info("AI generation stopped", {
       description: "You stopped the AI. Your current progress and files have been preserved.",
@@ -688,22 +692,43 @@ function Workspace() {
     if (!dragging) return;
     const onMove = (e: MouseEvent) => {
       const left = splitRef.current?.getBoundingClientRect().left ?? 0;
-      const max = Math.min(900, (splitRef.current?.clientWidth ?? 1200) - 360);
-      setChatWidth(Math.max(300, Math.min(max, e.clientX - left)));
+      const totalWidth = splitRef.current?.clientWidth ?? 1200;
+      const minChat = 280;
+      const minPreview = 360;
+      const maxChat = Math.max(minChat, totalWidth - minPreview);
+      const targetWidth = e.clientX - left;
+      setChatWidth(Math.max(minChat, Math.min(maxChat, targetWidth)));
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!e.touches?.[0]) return;
+      const left = splitRef.current?.getBoundingClientRect().left ?? 0;
+      const totalWidth = splitRef.current?.clientWidth ?? 1200;
+      const minChat = 280;
+      const minPreview = 360;
+      const maxChat = Math.max(minChat, totalWidth - minPreview);
+      const targetWidth = e.touches[0].clientX - left;
+      setChatWidth(Math.max(minChat, Math.min(maxChat, targetWidth)));
     };
     const onUp = () => {
       setDragging(false);
-      setChatWidth((w) => { localStorage.setItem("kenzo:chatWidth", String(w)); return w; });
+      setChatWidth((w) => {
+        try { localStorage.setItem("kenzo:chatWidth", String(w)); } catch {}
+        return w;
+      });
     };
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onUp);
     return () => {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onUp);
     };
   }, [dragging]);
 
@@ -927,6 +952,7 @@ function Workspace() {
   async function openProject(p: ProjectRow) {
     setDraft(false);
     setActiveId(p.id);
+    activeIdRef.current = p.id;
     setFiles({ ...DEFAULT_FILES, ...(p.files as Files) });
     setLogs([]);
     const { data } = await supabase
@@ -937,6 +963,11 @@ function Workspace() {
     setMessages((data ?? []) as Msg[]);
     setSidebarOpen(false);
     setPreviewNonce((n) => n + 1);
+    if (backgroundGeneratingProjectId === p.id) {
+      setBusy(true);
+    } else {
+      setBusy(false);
+    }
     try { localStorage.setItem("kenzo:activeProject", p.id); } catch {}
   }
 
@@ -949,10 +980,12 @@ function Workspace() {
     }
     setDraft(true);
     setActiveId(null);
+    activeIdRef.current = null;
     setDraftName("New project");
     setMessages([]);
     setFiles(DEFAULT_FILES);
     setLogs([]);
+    setBusy(false);
     setSidebarOpen(false);
     try { localStorage.setItem("kenzo:activeProject", "draft"); } catch {}
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -1072,6 +1105,8 @@ function Workspace() {
     setMessages((m) => [...m, userMsg]);
     abortControllerRef.current = new AbortController();
     setBusy(true);
+    setBackgroundGeneratingProjectId(projectId);
+    activeIdRef.current = projectId;
     startSteps(mode);
     await persistMsg(projectId, userMsg);
 
@@ -1317,10 +1352,6 @@ function Workspace() {
         "styles.css": result.css || files["styles.css"],
         "script.js": result.js ?? files["script.js"],
       };
-      setFiles(nextFiles);
-      setLogs([]);
-      void animateCode(nextFiles);
-
       await supabase.from("projects").update({ files: nextFiles, assets: collectAssets(nextFiles) }).eq("id", projectId);
 
       if (result.name) {
@@ -1336,22 +1367,59 @@ function Workspace() {
         mode: "build",
         snapshot: nextFiles,
       };
-      setMessages((m) => [...m, asst]);
       await persistMsg(projectId, asst);
-      setPreviewNonce((n) => n + 1);
-      setMobileTab("preview");
+
+      if (activeIdRef.current === projectId) {
+        setFiles(nextFiles);
+        setLogs([]);
+        void animateCode(nextFiles);
+        setMessages((m) => [...m, asst]);
+        setPreviewNonce((n) => n + 1);
+        setMobileTab("preview");
+      } else {
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.id === projectId
+              ? { ...p, files: nextFiles, name: (result.name as string) || p.name }
+              : p
+          )
+        );
+        const pName = (result.name as string) || projectName || "Project";
+        toast.success(`Kenzo finished building "${pName}"!`, {
+          description: "Your project is ready in the background.",
+          action: {
+            label: "Open Project",
+            onClick: () => {
+              const target = projects.find((p) => p.id === projectId) || {
+                id: projectId,
+                name: pName,
+                files: nextFiles,
+                updated_at: new Date().toISOString(),
+                user_id: user?.id || "",
+              };
+              openProject(target as ProjectRow);
+            },
+          },
+          duration: 9000,
+        });
+      }
     } catch (err: any) {
       if (err?.name === "AbortError" || abortControllerRef.current === null) {
         return;
       }
       const msg = err instanceof Error ? err.message : "Generation failed";
       toast.error(msg);
-      setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", content: `⚠️ ${msg}` }]);
+      if (activeIdRef.current === projectId) {
+        setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", content: `⚠️ ${msg}` }]);
+      }
     } finally {
       abortControllerRef.current = null;
       stopSteps();
-      setBusy(false);
-      inputRef.current?.focus();
+      setBackgroundGeneratingProjectId(null);
+      if (activeIdRef.current === projectId) {
+        setBusy(false);
+        inputRef.current?.focus();
+      }
     }
   }
 
@@ -2178,6 +2246,14 @@ function Workspace() {
 
   return (
     <div className="h-screen w-screen flex overflow-hidden">
+      {/* Dragging overlay to prevent iframe mouse trapping */}
+      {dragging && (
+        <div
+          className="fixed inset-0 z-[99999] cursor-col-resize select-none pointer-events-auto bg-transparent"
+          onMouseUp={() => setDragging(false)}
+          onTouchEnd={() => setDragging(false)}
+        />
+      )}
       {/* Sidebar */}
       {sidebarOpen && <div className="fixed inset-0 z-[105] bg-background/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
       <aside
@@ -2228,27 +2304,55 @@ function Workspace() {
               {query ? "No projects match that search." : "No projects yet. Create your first one!"}
             </div>
           )}
-          {filtered.map((p) => (
-            <div key={p.id} className={`group flex items-center gap-1 rounded-lg mb-1 transition ${activeId === p.id && !draft ? "bg-primary/10 text-primary font-medium" : "hover:bg-surface text-foreground"}`}>
-              <button
+          {filtered.map((p) => {
+            const isGenerating = backgroundGeneratingProjectId === p.id;
+            const isActive = activeId === p.id && !draft;
+            return (
+              <div
+                key={p.id}
+                className={`group flex items-center justify-between gap-1.5 rounded-lg mb-1 px-2.5 py-2 text-xs transition cursor-pointer ${
+                  isActive
+                    ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary shadow-xs"
+                    : "hover:bg-surface/80 text-foreground/85 hover:text-foreground"
+                } ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
                 onClick={() => { openProject(p); setSidebarOpen(false); }}
-                className={`flex-1 text-left px-3 py-2 text-sm truncate flex items-center gap-2 ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
                 title={p.name}
               >
-                <FileCode className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary transition" />
-                <span className={`truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>{p.name}</span>
-              </button>
-              {p.user_id === user?.id && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: p.id, name: p.name }); }}
-                  aria-label={`Delete ${p.name}`}
-                  className={`opacity-0 group-hover:opacity-100 focus:opacity-100 p-2 text-muted-foreground hover:text-destructive transition ${sidebarCollapsed ? "lg:hidden" : ""}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {isGenerating ? (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
+                  ) : (
+                    <FileCode
+                      className={`h-3.5 w-3.5 shrink-0 transition ${
+                        isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                      }`}
+                    />
+                  )}
+                  <span className={`truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+                    {p.name}
+                  </span>
+                  {isGenerating && !sidebarCollapsed && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-medium shrink-0 animate-pulse">
+                      Building...
+                    </span>
+                  )}
+                </div>
+                {p.user_id === user?.id && !sidebarCollapsed && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ id: p.id, name: p.name });
+                    }}
+                    aria-label={`Delete ${p.name}`}
+                    title="Delete project"
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition shrink-0"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div className="p-3 border-t border-glass-border space-y-1">
@@ -2308,6 +2412,20 @@ function Workspace() {
                 aria-label="Project name"
                 className="flex-1 min-w-0 bg-transparent text-sm font-medium outline-none focus:bg-input rounded-lg px-2 py-1 transition truncate"
               />
+              {backgroundGeneratingProjectId && backgroundGeneratingProjectId !== activeId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const found = projects.find((p) => p.id === backgroundGeneratingProjectId);
+                    if (found) openProject(found);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 text-primary border border-primary/30 text-[11px] font-medium animate-pulse cursor-pointer shrink-0"
+                  title="Kenzo is actively building another project in the background. Click to view."
+                >
+                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  <span className="hidden sm:inline">Building in background...</span>
+                </button>
+              )}
               {!draft && collabs.length > 0 && <Avatars people={collabs} onAdd={() => setShareOpen(true)} />}
               {!draft && collabs.length === 0 && (
                 <button onClick={() => setShareOpen(true)} title="Share project" className="p-2 rounded-lg hover:bg-surface transition active:scale-95">
@@ -2365,7 +2483,7 @@ function Workspace() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="flex flex-col gap-1.5">
                     {activeIdeaIndices.map((idx) => {
                       const item = PROMPT_IDEAS[idx] ?? PROMPT_IDEAS[0];
                       const IconComp = item.icon;
@@ -2377,22 +2495,21 @@ function Workspace() {
                             setInput(item.prompt);
                             inputRef.current?.focus();
                           }}
-                          className="group relative flex items-start gap-3 p-3.5 rounded-2xl glass border border-glass-border/70 hover:border-primary/50 hover:bg-surface/90 text-left transition-all duration-200 hover:shadow-lift active:scale-[0.99] cursor-pointer"
+                          className="group flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl glass-subtle border border-glass-border/70 hover:border-primary/50 hover:bg-surface/90 text-left transition-all duration-200 active:scale-[0.99] cursor-pointer shadow-2xs"
                         >
-                          <div className={`p-2 rounded-xl bg-gradient-to-br ${item.color} border shrink-0 transition-transform group-hover:scale-110 shadow-xs`}>
-                            <IconComp className="h-4 w-4" />
-                          </div>
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition truncate">
-                                {item.title}
-                              </span>
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className={`p-1.5 rounded-lg bg-gradient-to-br ${item.color} border shrink-0 transition-transform group-hover:scale-105 shadow-2xs`}>
+                              <IconComp className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-snug">
+                            <span className="text-xs font-semibold text-foreground group-hover:text-primary transition shrink-0">
+                              {item.title}
+                            </span>
+                            <span className="text-muted-foreground/40 text-[10px] hidden sm:inline shrink-0">·</span>
+                            <span className="text-[11px] text-muted-foreground truncate hidden sm:inline">
                               {item.subtitle}
-                            </p>
+                            </span>
                           </div>
-                          <div className="absolute right-3 top-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary">
+                          <div className="opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all text-primary shrink-0">
                             <ArrowUpRight className="h-3.5 w-3.5" />
                           </div>
                         </button>
@@ -2547,11 +2664,29 @@ function Workspace() {
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize chat and preview panels"
-          onMouseDown={() => setDragging(true)}
-          onDoubleClick={() => { setChatWidth(416); localStorage.setItem("kenzo:chatWidth", "416"); }}
-          className={`hidden lg:flex w-1.5 shrink-0 cursor-col-resize items-center justify-center group ${dragging ? "bg-primary/40" : "hover:bg-primary/25"} transition-colors`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onTouchStart={() => setDragging(true)}
+          onDoubleClick={() => {
+            const def = 420;
+            setChatWidth(def);
+            try { localStorage.setItem("kenzo:chatWidth", String(def)); } catch {}
+            toast.info("Panel width reset to default");
+          }}
+          className={`hidden lg:flex w-2 shrink-0 cursor-col-resize items-center justify-center relative select-none group ${
+            dragging ? "bg-primary/30" : "hover:bg-primary/20"
+          } transition-colors z-20`}
+          title="Drag to resize chat and preview · Double-click to reset"
         >
-          <div className={`h-10 w-0.5 rounded-full ${dragging ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
+          <div
+            className={`h-12 w-1 rounded-full transition-all ${
+              dragging
+                ? "bg-primary shadow-[0_0_8px_rgba(99,102,241,0.8)] scale-y-125"
+                : "bg-border group-hover:bg-primary/70"
+            }`}
+          />
         </div>
         )}
 
@@ -2564,8 +2699,8 @@ function Workspace() {
         >
           <div className="p-2">
 
-            <div className="h-12 flex items-center justify-between gap-2 px-2 rounded-xl glass border border-glass-border">
-              <div className="flex items-center gap-1.5 min-w-0">
+            <div className="h-12 flex items-center justify-between gap-1.5 px-2 rounded-xl glass border border-glass-border overflow-hidden">
+              <div className="flex items-center gap-1.5 min-w-0 shrink-0">
                 <button
                   type="button"
                   className="lg:hidden shrink-0 p-2 rounded-lg bg-surface/60 border border-glass-border hover:bg-surface text-foreground transition active:scale-95 mr-0.5 z-10"
@@ -2591,29 +2726,33 @@ function Workspace() {
                     <span className="flex items-center gap-1"><Monitor className="h-3 w-3" /> Preview</span>
                   </button>
                 </div>
-                <div className="flex gap-1 rounded-lg bg-input p-1">
+                <div className="flex gap-1 rounded-lg bg-input p-1 shrink-0">
                   {([["preview", Monitor, "Preview"], ["code", FileCode, "Code"], ["assets", FolderTree, "Files"]] as const).map(([k, Icon, label]) => (
                     <button
                       key={k}
                       onClick={() => setRightTab(k)}
                       title={label}
                       aria-label={label}
-                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition active:scale-95 ${rightTab === k ? "gradient-brand text-primary-foreground shadow-xs" : "hover:bg-surface text-muted-foreground"}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition active:scale-95 cursor-pointer shrink-0 ${
+                        rightTab === k
+                          ? "gradient-brand text-primary-foreground shadow-xs"
+                          : "hover:bg-surface text-muted-foreground hover:text-foreground"
+                      }`}
                     >
-                      <Icon className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">{label}</span>
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="hidden 2xl:inline">{label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={takeScreenshot}
                   title="Capture screenshot to fix UI errors"
                   aria-label="Capture screenshot"
-                  className="p-2 rounded-lg hover:bg-surface transition active:scale-95 text-muted-foreground hover:text-foreground"
+                  className="p-2 rounded-lg hover:bg-surface transition active:scale-95 text-muted-foreground hover:text-foreground shrink-0"
                 >
                   <Camera className="h-4 w-4" />
                 </button>
@@ -2631,7 +2770,7 @@ function Workspace() {
                   onPublished={handleWebsitePublished}
                 />
                 {rightTab === "preview" && (
-                  <div className="hidden md:flex gap-1 rounded-lg bg-input p-1 mr-1">
+                  <div className="hidden xl:flex gap-1 rounded-lg bg-input p-1 mr-0.5 shrink-0">
                     {([["desktop", Monitor, "Desktop"], ["tablet", Tablet, "Tablet"], ["mobile", Smartphone, "Mobile"]] as const).map(([key, Icon, label]) => (
                       <button key={key} onClick={() => setDevice(key)} title={label} aria-label={label} className={`p-1.5 rounded-md transition active:scale-95 ${device === key ? "gradient-brand text-primary-foreground" : "hover:bg-surface text-muted-foreground"}`}>
                         <Icon className="h-3.5 w-3.5" />
@@ -2643,19 +2782,19 @@ function Workspace() {
                   onClick={() => setConsoleOpen((v) => !v)}
                   title="Console"
                   aria-label="Toggle console"
-                  className={`relative p-2 rounded-lg transition active:scale-95 ${consoleOpen ? "bg-primary/15 text-primary" : "hover:bg-surface"}`}
+                  className={`relative p-2 rounded-lg transition active:scale-95 shrink-0 ${consoleOpen ? "bg-primary/15 text-primary" : "hover:bg-surface text-muted-foreground hover:text-foreground"}`}
                 >
                   <Terminal className="h-4 w-4" />
                   {errorCount > 0 && <span className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] grid place-items-center">{errorCount}</span>}
                 </button>
-                <button onClick={() => { setLogs([]); setPreviewNonce((n) => n + 1); }} title="Refresh preview" aria-label="Refresh preview" className="p-2 rounded-lg hover:bg-surface transition active:scale-95">
+                <button onClick={() => { setLogs([]); setPreviewNonce((n) => n + 1); }} title="Refresh preview" aria-label="Refresh preview" className="p-2 rounded-lg hover:bg-surface transition active:scale-95 text-muted-foreground hover:text-foreground shrink-0">
                   <RefreshCw className="h-4 w-4" />
                 </button>
                 <button
                   onClick={openExternalPreview}
                   title="Open live preview in a new tab with Publish toolbar"
                   aria-label="Open preview in a new tab"
-                  className="p-2 rounded-lg hover:bg-surface transition active:scale-95"
+                  className="p-2 rounded-lg hover:bg-surface transition active:scale-95 text-muted-foreground hover:text-foreground shrink-0"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </button>
@@ -2663,15 +2802,15 @@ function Workspace() {
                   <button
                     type="button"
                     onClick={() => setVisualEditMode((v) => !v)}
-                    title="Visual Editing: Hover and click any text directly on the website preview to edit it live and sync to code"
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 border ${
+                    title={`Visual Editing: ${visualEditMode ? "Active" : "Click to enable"}`}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 border cursor-pointer shrink-0 ${
                       visualEditMode
                         ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-xs ring-1 ring-emerald-500/30 font-semibold"
                         : "hover:bg-surface text-muted-foreground border-glass-border hover:text-foreground"
                     }`}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Visual Edit</span>
+                    <Pencil className="h-3.5 w-3.5 shrink-0" />
+                    <span className="hidden 2xl:inline">Visual Edit</span>
                   </button>
                 )}
                 <div className="relative">
@@ -2709,59 +2848,59 @@ function Workspace() {
             {rightTab === "code" && (
               <div className="flex-1 flex flex-col min-h-0 bg-[#1e1e1e] text-[#d4d4d4] font-mono select-none">
                 {/* VS Code Tab Bar */}
-                <div className="flex items-center justify-between gap-2 px-2 bg-[#252526] border-b border-[#333333] shrink-0 h-10">
-                  <div className="flex gap-1 overflow-x-auto h-full">
+                <div className="flex items-center justify-between gap-1 px-2 bg-[#252526] border-b border-[#333333] shrink-0 h-10 overflow-hidden">
+                  <div className="flex gap-1 overflow-x-auto h-full scrollbar-none">
                     {(["index.html", "styles.css", "script.js"] as const).map((name) => {
                       const isActive = activeFile === name;
                       return (
                         <button
                           key={name}
                           onClick={() => setActiveFile(name)}
-                          className={`inline-flex items-center gap-2 whitespace-nowrap px-3.5 h-full text-xs font-medium transition cursor-pointer ${
+                          className={`inline-flex items-center gap-1.5 whitespace-nowrap px-3 h-full text-xs font-medium transition cursor-pointer shrink-0 ${
                             isActive
                               ? "bg-[#1e1e1e] text-[#ffffff] border-t-2 border-[#007acc] shadow-xs"
                               : "text-[#969696] hover:text-[#cccccc] hover:bg-[#2a2d2e] border-t-2 border-transparent"
                           }`}
                         >
                           {name === "index.html" ? (
-                            <span className="text-[#e44d26] font-bold text-[11px]">HTML</span>
+                            <span className="text-[#e44d26] font-bold text-[10px]">HTML</span>
                           ) : name === "styles.css" ? (
-                            <span className="text-[#264de4] font-bold text-[11px]">CSS</span>
+                            <span className="text-[#264de4] font-bold text-[10px]">CSS</span>
                           ) : (
-                            <span className="text-[#f7df1e] font-bold text-[11px]">JS</span>
+                            <span className="text-[#f7df1e] font-bold text-[10px]">JS</span>
                           )}
-                          <span>{name}</span>
+                          <span className="truncate max-w-[100px]">{name}</span>
                         </button>
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-1.5 pr-2">
+                  <div className="flex items-center gap-1 pr-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => setVisualEditMode((v) => !v)}
-                      title="Visual Editing: Click any text directly on the preview to edit in real time"
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-sans font-medium transition active:scale-95 ${
+                      title={`Visual Editing: ${visualEditMode ? "Active" : "Click to enable"}`}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-sans font-medium transition active:scale-95 cursor-pointer shrink-0 ${
                         visualEditMode
                           ? "bg-emerald-500/25 text-emerald-400 border border-emerald-500/40"
                           : "text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e]"
                       }`}
                     >
-                      <Pencil className="h-3 w-3" />
-                      <span>Visual Edit</span>
+                      <Pencil className="h-3 w-3 shrink-0" />
+                      <span className="hidden 2xl:inline">Visual Edit</span>
                     </button>
                     <button
                       type="button"
                       onClick={formatCurrentFile}
                       title="Format Code (Prettier indent)"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-sans font-medium text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e] transition active:scale-95"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-sans font-medium text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e] transition active:scale-95 cursor-pointer shrink-0"
                     >
-                      <Wand2 className="h-3 w-3" />
-                      <span className="hidden sm:inline">Format</span>
+                      <Wand2 className="h-3 w-3 shrink-0" />
+                      <span className="hidden 2xl:inline">Format</span>
                     </button>
                     <button
                       onClick={copyActiveFile}
                       title="Copy file code"
-                      className="p-1.5 rounded text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e] transition active:scale-95"
+                      className="p-1.5 rounded text-[#969696] hover:text-[#ffffff] hover:bg-[#2a2d2e] transition active:scale-95 shrink-0"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
