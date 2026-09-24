@@ -2,12 +2,27 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { generateWithKey, type AiPart } from "./ai-gateway.server";
-import { resolveAiKeys, reportKeyExhausted } from "./ai-keys.server";
-
-
+import {
+  resolveExecutionKeys,
+  recordGiveawayPrompt,
+  reportUserKeyExhausted,
+  reportKeyExhausted,
+  type AiKey,
+} from "./ai-keys.server";
 
 const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
 You author COMPLETE, production-quality, self-contained web apps as exactly three files: index.html, styles.css, script.js.
+
+DEVELOPER ATTRIBUTION:
+When asked who developed you, created you, or built you, state proudly, professionally, and clearly:
+"I am developed by Eserom Demisew and for more info about my great and creative developer visit this website: https://eserom.vercel.app"
+
+ELITE DESIGN & ADVANCED UI:
+- Turn even simple, one-line prompts into extremely beautiful, modern, advanced, and professional UI.
+- Use a curated, harmonious color palette with vibrant accents, deep contrast, and glassmorphism.
+- Modern typography via Google Fonts (Inter, Plus Jakarta Sans, Outfit).
+- Generous fluid whitespace, rounded corners, subtle shadows, and smooth micro-interactions.
+- Never build bare minimum prototypes. Always deliver high-end, polished, production-ready web apps.
 
 OUTPUT CONTRACT — follow EXACTLY, no JSON, no markdown fences:
 <<<FILE:index.html>>>
@@ -37,7 +52,7 @@ index.html
 styles.css
 - Own the entire visual design here — no inline styles in the HTML.
 - Define a token layer in :root (colors, radii, spacing, shadows, transitions) and support dark mode via [data-theme="dark"] or prefers-color-scheme.
-- Modern layout with flexbox/grid, fluid typography with clamp(), generous whitespace, rounded corners, layered shadows, and hover/focus-visible states. Use beautiful SOLID colors and glassmorphism — never CSS gradients.
+- Modern layout with flexbox/grid, fluid typography with clamp(), generous whitespace, rounded corners, layered shadows, and hover/focus-visible states. Use beautiful SOLID colors and glassmorphism — never raw harsh gradients.
 - Fully responsive: mobile-first, with breakpoints for tablet and desktop. Include subtle keyframe animations and honor prefers-reduced-motion.
 
 script.js
@@ -67,7 +82,6 @@ IMAGES — MANDATORY, MUST ACTUALLY LOAD
 SCROLL EXPERIENCE
 - Add a slim fixed scroll-progress bar at the very top of the page (a div filled from script.js on scroll), plus smooth scrolling, scroll-reveal via IntersectionObserver, and a sticky header that condenses on scroll. Keep it subtle and professional, and disable motion under prefers-reduced-motion.
 - Keep the code clean, commented where non-obvious, and free of dead code.
-
 `;
 
 const Input = z.object({
@@ -98,85 +112,76 @@ const ALLOWED_MODELS = new Set([
   "google/gemini-flash-latest",
 ]);
 
-/** Auto mode: strongest coder first, then progressively cheaper/always-available ones. */
-const AUTO_CHAIN = [
-  "google/gemini-3.6-flash",
-  "google/gemini-2.5-flash",
-  "google/gemini-flash-latest",
-  "google/gemini-2.5-flash-lite",
-];
-
 const DEFAULT_MODEL = "auto";
 
-/** Model ids to try, in order, for the requested setting. */
-function modelChain(requested?: string) {
-  if (!requested || requested === "auto" || !ALLOWED_MODELS.has(requested)) return AUTO_CHAIN;
-  return [requested, ...AUTO_CHAIN.filter((m) => m !== requested)];
+/** Auto mode tries Google models in sensible fallback order */
+const AUTO_CHAIN = [
+  "google/gemini-3.7-flash",
+  "google/gemini-3.6-flash",
+  "google/gemini-flash-latest",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite",
+  "google/gemini-3.1-pro-preview",
+];
+
+function modelChain(chosen: string): string[] {
+  if (chosen === "auto" || !ALLOWED_MODELS.has(chosen)) return AUTO_CHAIN;
+  return [chosen, ...AUTO_CHAIN.filter((m) => m !== chosen)];
 }
 
+function parseResult(raw: string): {
+  html: string;
+  css: string;
+  js: string;
+  summary: string;
+  name?: string | null;
+  memory: string[];
+} {
+  const t = raw.trim();
 
-type Result = { html: string; css: string; js: string; summary: string; name?: string; memory: string[] };
-
-function stripFences(s: string) {
-  return s
-    .replace(/^\s*```[a-z]*\s*\n?/i, "")
-    .replace(/\n?```\s*$/i, "")
-    .trim();
-}
-
-/** Parse the marker protocol; fall back to JSON, then to fenced code blocks. */
-function parseResult(text: string): Result {
-  const t = (text ?? "").replace(/\r\n/g, "\n");
-  const STOP = "(?:FILE:|SUMMARY|NAME|MEMORY|END)";
-
-  const grab = (name: string) => {
-    const re = new RegExp(
-      `<<<FILE:${name.replace(".", "\\.")}>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`,
-      "i",
-    );
+  // Primary contract: <<<FILE:...>>> markers
+  const match = (tag: string) => {
+    const re = new RegExp(`<<<${tag}>>>([\\s\\S]*?)(?=<<<[A-Z_:]+>>>|$)`);
     const m = t.match(re);
-    return m ? stripFences(m[1]) : "";
+    return m ? m[1].trim() : "";
   };
 
-  const html = grab("index.html");
-  const css = grab("styles.css");
-  const js = grab("script.js");
-  const sum = t.match(new RegExp(`<<<SUMMARY>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`, "i"));
-  const nameM = t.match(new RegExp(`<<<NAME>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`, "i"));
-  const memM = t.match(new RegExp(`<<<MEMORY>>>\\n?([\\s\\S]*?)(?=\\n?<<<${STOP}|$)`, "i"));
+  const html = match("FILE:index.html");
+  const css = match("FILE:styles.css");
+  const js = match("FILE:script.js");
+  const summary = match("SUMMARY");
+  const name = match("NAME");
+  const memRaw = match("MEMORY");
+  const memory = memRaw
+    ? memRaw
+        .split("\n")
+        .map((s) => s.replace(/^[-*•]\s*/, "").trim())
+        .filter(Boolean)
+    : [];
 
-  const memory = (memM ? memM[1] : "")
-    .split("\n")
-    .map((l) => l.replace(/^[-*•]\s*/, "").trim())
-    .filter((l) => l.length > 2 && l.length < 200)
-    .slice(0, 5);
-
-  if (html || css || js) {
+  if (html && css) {
     return {
       html,
       css,
       js,
-      summary: (sum ? sum[1].trim() : "") || "Updated your app.",
-      name: nameM ? nameM[1].trim().replace(/^["“]|["”]$/g, "").slice(0, 60) || undefined : undefined,
+      summary: summary || "Updated your app.",
+      name: name || null,
       memory,
     };
   }
 
-  // Fallback 1: strict JSON payload
+  // Fallback 1: JSON payload
   try {
-    let j = t.trim();
-    if (j.startsWith("```")) j = stripFences(j);
-    const first = j.indexOf("{");
-    const last = j.lastIndexOf("}");
-    if (first !== -1 && last !== -1) j = j.slice(first, last + 1);
-    const parsed = JSON.parse(j);
-    if (parsed && (parsed.html || parsed.css || parsed.js)) {
+    const jsonMatch = t.match(/\{[\s\S]*"index\.html"[\s\S]*\}/);
+    if (jsonMatch) {
+      const p = JSON.parse(jsonMatch[0]);
       return {
-        html: String(parsed.html ?? ""),
-        css: String(parsed.css ?? ""),
-        js: String(parsed.js ?? ""),
-        summary: String(parsed.summary ?? "Updated your app."),
-        memory: [],
+        html: p["index.html"] || "",
+        css: p["styles.css"] || "",
+        js: p["script.js"] || "",
+        summary: p.summary || "Updated your app.",
+        name: p.name || null,
+        memory: Array.isArray(p.memory) ? p.memory : [],
       };
     }
   } catch {
@@ -209,12 +214,24 @@ export const generateCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
   .handler(async ({ data, context }) => {
-    const keys = await resolveAiKeys();
-    if (!keys.length)
-      throw new Error(
-        "No Gemini API key is configured. An admin must add one in the admin panel (AI API Keys).",
-      );
+    const { userKeys, adminKeys, isGiveawayAllowed } = await resolveExecutionKeys(context.userId);
 
+    const keysToTry: { key: AiKey; isGiveaway: boolean }[] = [];
+    userKeys.forEach((k) => keysToTry.push({ key: k, isGiveaway: false }));
+    if (isGiveawayAllowed) {
+      adminKeys.forEach((k) => keysToTry.push({ key: k, isGiveaway: true }));
+    }
+
+    if (!keysToTry.length) {
+      if (!isGiveawayAllowed) {
+        throw new Error(
+          "Daily free prompt limit reached (3/3 used). Add your free Gemini API key in Settings (or wait for the daily reset) to continue building.",
+        );
+      }
+      throw new Error(
+        "No AI API key is configured. Please add your Gemini API key in Settings (or ask an admin to configure backup keys).",
+      );
+    }
 
     const chain = modelChain(data.model ?? DEFAULT_MODEL);
 
@@ -266,13 +283,13 @@ ${CONTRACT}`
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.${memBlock}`;
 
     try {
-      // Auto mode: walk the model chain, and inside it every configured key.
-      // A model that is unavailable, overloaded or rejects the request simply
-      // hands over to the next one, so a build never dies on one bad choice.
       let text = "";
       let lastErr: unknown = null;
+      let usedGiveaway = false;
+
       outer: for (const modelId of chain) {
-        for (const k of keys) {
+        for (const item of keysToTry) {
+          const k = item.key;
           try {
             text = await generateWithKey({
               apiKey: k.api_key,
@@ -281,6 +298,7 @@ ${CONTRACT}`
               parts,
               maxOutputTokens: 32000,
             });
+            usedGiveaway = item.isGiveaway;
             lastErr = null;
             break outer;
           } catch (e) {
@@ -288,13 +306,18 @@ ${CONTRACT}`
             const m = e instanceof Error ? e.message : String(e);
             console.error(`[generateCode] ${modelId} / key "${k.label}" failed:`, m);
             const exhausted = m.includes("402") || m.includes("429") || m.includes("401") || m.includes("403");
-            if (exhausted) await reportKeyExhausted(k, m);
+            if (exhausted) {
+              if (k.isUserKey) await reportUserKeyExhausted(k, m);
+              else await reportKeyExhausted(k, m);
+            }
           }
         }
       }
       if (lastErr) throw lastErr;
 
-
+      if (usedGiveaway) {
+        await recordGiveawayPrompt(context.userId);
+      }
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
@@ -307,7 +330,6 @@ ${CONTRACT}`
             .insert(fresh.map((fact) => ({ user_id: context.userId, fact })));
         }
 
-        // Keep unchanged files instead of blanking them out.
         return {
           html: parsed.html || cf["index.html"] || "",
           css: parsed.css || cf["styles.css"] || "",
@@ -325,7 +347,7 @@ ${CONTRACT}`
       console.error("[generateCode] failure:", msg);
       if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
       if (msg.includes("402"))
-        throw new Error("AI credits exhausted for this workspace. Add credits to continue.");
+        throw new Error("AI credits exhausted. Please check your API key in Settings.");
       throw new Error(`Generation failed: ${msg}`);
     }
   });

@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Avatars, ShareDialog } from "@/components/ShareDialog";
 import { PublishMenu } from "@/components/PublishMenu";
+import { GithubMenu } from "@/components/GithubMenu";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { generateCode } from "@/lib/generate.functions";
@@ -16,7 +17,7 @@ import {
   FileCode, Palette, FileText, Loader2, Menu, X, Sparkles, Search, Share2,
   Monitor, Tablet, Smartphone, ChevronDown, FileArchive, Copy, Mic, Square,
   ImagePlus, Terminal, History, ThumbsUp, ThumbsDown, Pencil, Check, Hammer,
-  ClipboardList, Image as ImageIcon,
+  ClipboardList, Image as ImageIcon, MessageSquare, FolderTree,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -200,6 +201,8 @@ function Workspace() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem("kenzo:sidebarCollapsed") === "true"; } catch { return false; }
   });
+  const [mobileTab, setMobileTab] = useState<"chat" | "preview">("chat");
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -589,6 +592,7 @@ function Workspace() {
       setMessages((m) => [...m, asst]);
       await persistMsg(projectId, asst);
       setPreviewNonce((n) => n + 1);
+      setMobileTab("preview");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Generation failed";
       toast.error(msg);
@@ -693,6 +697,43 @@ function Workspace() {
     if (picked.length) setAttachments((a) => [...a, ...picked].slice(0, 4));
   }
 
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imgFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) imgFiles.push(file);
+      }
+    }
+    if (imgFiles.length > 0) {
+      e.preventDefault();
+      const picked: string[] = [];
+      const remaining = 4 - attachments.length;
+      for (const f of imgFiles.slice(0, remaining)) {
+        if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name} is larger than 5 MB`); continue; }
+        picked.push(await fileToDataUrl(f));
+      }
+      if (picked.length) {
+        setAttachments((a) => [...a, ...picked].slice(0, 4));
+        toast.info("Image pasted from clipboard");
+      }
+    }
+  }
+
+  function fixErrorWithAi(errText: string) {
+    const prompt = `Please fix this runtime error in the app:\n\`\`\`\n${errText.slice(0, 600)}\n\`\`\``;
+    setInput(prompt);
+    setMobileTab("chat");
+    setConsoleOpen(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  }
+
   /* ---------- export ---------- */
   function projectSlug() {
     return (projectName || "kenzo-app").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "kenzo-app";
@@ -754,7 +795,8 @@ function Workspace() {
 
   /* ---------- greeting + mode switching + composer ---------- */
 
-  const firstName = (profile?.display_name || user?.email?.split("@")[0] || "there").split(" ")[0];
+  const displayName = profile?.display_name?.trim() || "";
+  const firstName = (displayName || "there").split(" ")[0];
   const greeting = mode === "plan" ? `Let's plan it out, ${firstName}` : `What should we build, ${firstName}?`;
 
   /** Switch Plan <-> Build with a short cross-fade, optionally prefilling the box. */
@@ -779,8 +821,14 @@ function Workspace() {
       {attachments.length > 0 && (
         <div className="flex gap-2 flex-wrap px-3 pt-3">
           {attachments.map((src, i) => (
-            <div key={i} className="relative">
-              <img src={src} alt="Attachment" className="h-14 w-14 rounded-lg object-cover border border-glass-border" />
+            <div key={i} className="relative group/thumb">
+              <img
+                src={src}
+                alt="Attachment"
+                onClick={() => setViewingImage(src)}
+                className="h-14 w-14 rounded-lg object-cover border border-glass-border cursor-pointer hover:opacity-80 transition"
+                title="Click to view full size"
+              />
               <button
                 type="button"
                 aria-label="Remove attachment"
@@ -798,11 +846,12 @@ function Workspace() {
         ref={inputRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
+        onPaste={handlePaste}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
         }}
         rows={3}
-        placeholder={mode === "plan" ? "Describe the idea — Kenzo will plan it first…" : "Describe what to build or change…"}
+        placeholder={mode === "plan" ? "Describe the idea — Kenzo will plan it first…" : "Describe what to build or change… (you can paste images)"}
         className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm outline-none placeholder:text-muted-foreground"
       />
 
@@ -936,7 +985,7 @@ function Workspace() {
 
         <div className="p-3 border-t border-glass-border space-y-1">
           {!sidebarCollapsed && (
-            <div className="px-2 py-2 text-xs text-muted-foreground truncate">{profile?.display_name || user?.email}</div>
+            <div className="px-2 py-2 text-xs font-medium text-muted-foreground truncate">{profile?.display_name || "My Account"}</div>
           )}
           <Link to="/settings" title="Settings" className={`flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "justify-center px-0" : "px-3"}`}>
             <Settings className="h-4 w-4" /> {!sidebarCollapsed && <span>Settings</span>}
@@ -950,7 +999,16 @@ function Workspace() {
       {/* Main */}
       <main ref={splitRef} className="flex-1 flex flex-col lg:flex-row min-w-0">
         {/* Chat */}
-        <section className={`flex flex-col min-h-0 ${workspaceVisible ? "w-full border-r border-glass-border lg:shrink-0" : "flex-1 w-full"}`} data-chat-panel={workspaceVisible ? "" : undefined}>
+        <section
+          className={`min-h-0 ${
+            workspaceVisible
+              ? mobileTab === "chat"
+                ? "flex flex-col flex-1 w-full lg:shrink-0 border-r border-glass-border"
+                : "hidden lg:flex lg:flex-col lg:shrink-0 border-r border-glass-border"
+              : "flex flex-col flex-1 w-full"
+          }`}
+          data-chat-panel={workspaceVisible ? "" : undefined}
+        >
           {workspaceVisible && <style>{`@media (min-width:1024px){[data-chat-panel]{width:${chatWidth}px}}`}</style>}
 
 
@@ -968,6 +1026,24 @@ function Workspace() {
                 <button onClick={() => setShareOpen(true)} title="Share project" className="p-2 rounded-lg hover:bg-surface transition active:scale-95">
                   <Share2 className="h-4 w-4" />
                 </button>
+              )}
+              {workspaceVisible && (
+                <div className="flex lg:hidden items-center bg-input rounded-lg p-0.5 ml-auto mr-1">
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab("chat")}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition ${mobileTab === "chat" ? "gradient-brand text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3" /> Chat</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab("preview")}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition ${mobileTab === "preview" ? "gradient-brand text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <span className="flex items-center gap-1"><Monitor className="h-3 w-3" /> Preview</span>
+                  </button>
+                </div>
               )}
               <NotificationBell userId={user?.id ?? null} />
             </div>
@@ -1022,7 +1098,14 @@ function Workspace() {
                         {!!m.attachments?.length && (
                           <div className="flex gap-1.5 flex-wrap justify-end">
                             {m.attachments.map((src, i) => (
-                              <img key={i} src={src} alt="Attachment" className="h-16 w-16 rounded-lg object-cover border border-glass-border" />
+                              <img
+                                key={i}
+                                src={src}
+                                alt="Attachment"
+                                onClick={() => setViewingImage(src)}
+                                className="h-16 w-16 rounded-lg object-cover border border-glass-border cursor-pointer hover:opacity-80 transition"
+                                title="Click to view full size"
+                              />
                             ))}
                           </div>
                         )}
@@ -1132,18 +1215,49 @@ function Workspace() {
 
         {/* Code + Preview */}
         {workspaceVisible && (
-        <section className="flex-1 flex flex-col min-w-0 min-h-0 animate-fade-in-up">
+        <section
+          className={`flex-1 flex flex-col min-w-0 min-h-0 animate-fade-in-up ${
+            mobileTab === "preview" ? "flex" : "hidden lg:flex"
+          }`}
+        >
           <div className="p-2">
 
             <div className="h-12 flex items-center justify-between gap-2 px-2 rounded-xl glass border border-glass-border">
-              <div className="flex gap-1 rounded-lg bg-input p-1">
-                {([["preview", "Preview"], ["code", "Code"], ["assets", "Files"]] as const).map(([k, label]) => (
-                  <button key={k} onClick={() => setRightTab(k)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition active:scale-95 ${rightTab === k ? "gradient-brand text-primary-foreground" : "hover:bg-surface text-muted-foreground"}`}>
-                    {label}
+              <div className="flex items-center gap-1.5">
+                <div className="flex lg:hidden items-center bg-input rounded-lg p-0.5 mr-1">
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab("chat")}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition ${mobileTab === "chat" ? "gradient-brand text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3" /> Chat</span>
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab("preview")}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition ${mobileTab === "preview" ? "gradient-brand text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <span className="flex items-center gap-1"><Monitor className="h-3 w-3" /> Preview</span>
+                  </button>
+                </div>
+                <div className="flex gap-1 rounded-lg bg-input p-1">
+                  {([["preview", Monitor, "Preview"], ["code", FileCode, "Code"], ["assets", FolderTree, "Files"]] as const).map(([k, Icon, label]) => (
+                    <button
+                      key={k}
+                      onClick={() => setRightTab(k)}
+                      title={label}
+                      aria-label={label}
+                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition active:scale-95 ${rightTab === k ? "gradient-brand text-primary-foreground shadow-xs" : "hover:bg-surface text-muted-foreground"}`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+
               <div className="flex items-center gap-1">
+                <GithubMenu projectId={activeId} projectName={projectName} />
                 <PublishMenu projectId={activeId} />
                 {rightTab === "preview" && (
                   <div className="hidden md:flex gap-1 rounded-lg bg-input p-1 mr-1">
@@ -1322,11 +1436,29 @@ function Workspace() {
                     <button onClick={() => setConsoleOpen(false)} aria-label="Close console" className="p-1 rounded-md hover:bg-surface transition"><X className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
-                <div className="flex-1 overflow-auto font-mono text-[11px] px-3 py-2 space-y-0.5">
+                <div className="flex-1 overflow-auto font-mono text-[11px] px-3 py-2 space-y-1">
                   {logs.length === 0 && <p className="text-muted-foreground">No output yet. Interact with the preview to see logs and errors.</p>}
                   {logs.map((l) => (
-                    <div key={l.id} className={l.level === "error" ? "text-destructive" : l.level === "warn" ? "text-warning" : "text-foreground/80"}>
-                      <span className="text-muted-foreground mr-2">{l.level}</span>{l.text}
+                    <div
+                      key={l.id}
+                      className={`flex items-start justify-between gap-2 py-1 px-1.5 rounded hover:bg-surface/50 transition ${
+                        l.level === "error" ? "text-destructive" : l.level === "warn" ? "text-warning" : "text-foreground/80"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 break-all">
+                        <span className="text-muted-foreground mr-2 font-semibold uppercase text-[10px]">{l.level}</span>
+                        {l.text}
+                      </div>
+                      {l.level === "error" && (
+                        <button
+                          type="button"
+                          onClick={() => fixErrorWithAi(l.text)}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-md bg-destructive/15 text-destructive hover:bg-destructive/25 px-2 py-0.5 text-[11px] font-medium transition active:scale-95"
+                          title="Ask Kenzo to fix this error"
+                        >
+                          <Sparkles className="h-3 w-3" /> Fix with AI
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1368,6 +1500,31 @@ function Workspace() {
           </div>
         </div>
       )}
+
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-[120] bg-background/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setViewingImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setViewingImage(null)}
+              aria-label="Close image"
+              className="absolute -top-3 -right-3 z-10 p-2 rounded-full bg-surface border border-glass-border shadow-lift text-foreground hover:bg-muted transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={viewingImage}
+              alt="Preview full image"
+              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl border border-glass-border"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1375,6 +1532,7 @@ function Workspace() {
 function IconBtn({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: React.ReactNode }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       title={label}
       aria-label={label}

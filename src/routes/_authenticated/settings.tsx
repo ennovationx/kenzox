@@ -4,16 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
 import { setTheme, getStoredTheme, type Theme } from "@/lib/theme";
-import { ArrowLeft, User, Sparkles, Monitor, Moon, Sun, Rocket } from "lucide-react";
+import { ArrowLeft, User, Sparkles, Monitor, Moon, Sun, Rocket, Key } from "lucide-react";
 import { NetlifyPanel } from "@/components/NetlifyPanel";
+import { GithubPanel } from "@/components/GithubPanel";
+import { UserApiKeysPanel } from "@/components/UserApiKeysPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
       { title: "Settings — Kenzo" },
-      { name: "description", content: "Manage your account and AI preferences." },
+      { name: "description", content: "Manage your account, API keys, and deployment preferences." },
       { property: "og:title", content: "Settings — Kenzo" },
-      { property: "og:description", content: "Manage your account and AI preferences." },
+      { property: "og:description", content: "Manage your account, API keys, and deployment preferences." },
     ],
   }),
   component: SettingsPage,
@@ -32,7 +34,7 @@ const MODELS = [
 
 function SettingsPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"account" | "ai" | "deploy">("account");
+  const [tab, setTab] = useState<"account" | "apikeys" | "ai" | "deploy">("account");
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -45,7 +47,9 @@ function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("netlify")) setTab("deploy");
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("netlify") || params.has("github")) setTab("deploy");
+    if (params.has("keys")) setTab("apikeys");
   }, []);
 
   useEffect(() => {
@@ -74,7 +78,7 @@ function SettingsPage() {
       .eq("id", userId);
     setSaving(false);
     if (error) return toast.error(error.message);
-    toast.success("Account saved");
+    toast.success("Account profile updated");
   }
 
   async function saveAi() {
@@ -124,33 +128,76 @@ function SettingsPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-4xl px-6 py-10 grid gap-6 md:grid-cols-[220px_1fr]">
-        <nav className="glass rounded-2xl p-2 h-fit">
-          <button onClick={() => setTab("account")} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition ${tab === "account" ? "gradient-brand text-primary-foreground" : "hover:bg-surface"}`}>
-            <User className="h-4 w-4" /> Account
+      <div className="mx-auto max-w-4xl px-6 py-10 grid gap-6 md:grid-cols-[230px_1fr]">
+        <nav className="glass rounded-2xl p-2 h-fit space-y-1">
+          <button
+            onClick={() => setTab("account")}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition ${tab === "account" ? "gradient-brand text-primary-foreground shadow-lift" : "hover:bg-surface text-muted-foreground hover:text-foreground"}`}
+          >
+            <User className="h-4 w-4" /> Account Profile
           </button>
-          <button onClick={() => setTab("ai")} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition ${tab === "ai" ? "gradient-brand text-primary-foreground" : "hover:bg-surface"}`}>
-            <Sparkles className="h-4 w-4" /> AI customization
+          <button
+            onClick={() => setTab("apikeys")}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition ${tab === "apikeys" ? "gradient-brand text-primary-foreground shadow-lift" : "hover:bg-surface text-muted-foreground hover:text-foreground"}`}
+          >
+            <Key className="h-4 w-4" /> API Keys & Giveaway
           </button>
-          <button onClick={() => setTab("deploy")} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition ${tab === "deploy" ? "gradient-brand text-primary-foreground" : "hover:bg-surface"}`}>
-            <Rocket className="h-4 w-4" /> Deployments
+          <button
+            onClick={() => setTab("ai")}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition ${tab === "ai" ? "gradient-brand text-primary-foreground shadow-lift" : "hover:bg-surface text-muted-foreground hover:text-foreground"}`}
+          >
+            <Sparkles className="h-4 w-4" /> AI Customization
+          </button>
+          <button
+            onClick={() => setTab("deploy")}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition ${tab === "deploy" ? "gradient-brand text-primary-foreground shadow-lift" : "hover:bg-surface text-muted-foreground hover:text-foreground"}`}
+          >
+            <Rocket className="h-4 w-4" /> Deployments & GitHub
           </button>
         </nav>
 
         <div className="glass rounded-2xl p-6 animate-fade-in-up">
           {tab === "deploy" ? (
-            <NetlifyPanel />
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-semibold">Deployments & Integrations</h2>
+                <p className="text-sm text-muted-foreground">Publish to Netlify or push repositories to GitHub.</p>
+              </div>
+              <GithubPanel />
+              <NetlifyPanel />
+            </div>
+          ) : tab === "apikeys" ? (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-semibold">Gemini API Keys & Quota</h2>
+                <p className="text-sm text-muted-foreground">Manage your personal API keys and view your daily free giveaway prompts.</p>
+              </div>
+              <UserApiKeysPanel />
+            </div>
           ) : tab === "account" ? (
             <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-semibold">Account</h2>
-                <p className="text-sm text-muted-foreground">Update your profile and password.</p>
+                <h2 className="text-xl font-semibold">Account Profile</h2>
+                <p className="text-sm text-muted-foreground">Your name is displayed throughout Kenzo instead of your email.</p>
               </div>
-              <TextField label="Email" value={email} disabled />
-              <TextField label="Display name" value={displayName} onChange={setDisplayName} />
-              <button onClick={saveAccount} disabled={saving} className="rounded-lg gradient-brand px-4 py-2 text-sm font-medium text-primary-foreground shadow-lift disabled:opacity-50">
-                Save
-              </button>
+
+              <div className="space-y-4">
+                <TextField
+                  label="Display Name (shown on UI)"
+                  value={displayName}
+                  onChange={setDisplayName}
+                  placeholder="e.g. Alex Rivera"
+                />
+                <TextField label="Account Email" value={email} disabled />
+
+                <button
+                  onClick={saveAccount}
+                  disabled={saving}
+                  className="rounded-xl gradient-brand px-5 py-2 text-sm font-semibold text-primary-foreground shadow-lift disabled:opacity-50 hover:opacity-90 transition active:scale-95"
+                >
+                  {saving ? "Saving…" : "Save Profile"}
+                </button>
+              </div>
 
               <div className="border-t border-border pt-6">
                 <h3 className="font-medium">Theme</h3>
@@ -172,19 +219,28 @@ function SettingsPage() {
               </div>
 
               <div className="border-t border-border pt-6">
-                <h3 className="font-medium">Change password</h3>
+                <h3 className="font-medium">Change Password</h3>
                 <div className="mt-3 flex gap-2">
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="New password (min 8 chars)"
-                    className="flex-1 rounded-lg bg-input border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25" />
-                  <button onClick={changePassword} className="rounded-lg glass px-4 py-2 text-sm font-medium hover:bg-surface">Update</button>
+                    className="flex-1 rounded-lg bg-input border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+                  />
+                  <button onClick={changePassword} className="rounded-lg glass px-4 py-2 text-sm font-medium hover:bg-surface">
+                    Update
+                  </button>
                 </div>
               </div>
 
               <div className="border-t border-border pt-6">
-                <h3 className="font-medium text-destructive">Danger zone</h3>
+                <h3 className="font-medium text-destructive">Danger Zone</h3>
                 <p className="text-sm text-muted-foreground mt-1">Delete your account and all projects.</p>
-                <button onClick={deleteAccount} className="mt-3 rounded-lg border border-destructive/50 text-destructive px-4 py-2 text-sm font-medium hover:bg-destructive/10 transition">
+                <button
+                  onClick={deleteAccount}
+                  className="mt-3 rounded-lg border border-destructive/50 text-destructive px-4 py-2 text-sm font-medium hover:bg-destructive/10 transition"
+                >
                   Delete account
                 </button>
               </div>
@@ -192,32 +248,36 @@ function SettingsPage() {
           ) : (
             <div className="space-y-5">
               <div>
-                <h2 className="text-xl font-semibold">AI customization</h2>
-                <p className="text-sm text-muted-foreground">Tune how Kenzo generates code for you.</p>
+                <h2 className="text-xl font-semibold">AI Customization</h2>
+                <p className="text-sm text-muted-foreground">Tune how Kenzo generates code and designs apps for you.</p>
               </div>
 
               <SelectField label="Personality" value={personality} onChange={setPersonality} options={[
                 { v: "balanced", l: "Balanced — friendly + technical" },
                 { v: "concise", l: "Concise — minimal chatter" },
-                { v: "playful", l: "Playful — a little personality" },
-                { v: "expert", l: "Expert — assume senior dev" },
+                { v: "playful", l: "Playful — creative and vivid" },
+                { v: "expert", l: "Expert — senior full-stack engineer" },
               ]} />
               <SelectField label="Response verbosity" value={verbosity} onChange={setVerbosity} options={[
-                { v: "terse", l: "Terse" },
-                { v: "normal", l: "Normal" },
-                { v: "detailed", l: "Detailed" },
+                { v: "terse", l: "Terse — just the summary" },
+                { v: "normal", l: "Normal — clear breakdown" },
+                { v: "detailed", l: "Detailed — comprehensive review" },
               ]} />
               <SelectField label="Coding style" value={style} onChange={setStyle} options={[
-                { v: "modern", l: "Modern — semantic + accessible" },
-                { v: "minimal", l: "Minimal — small footprint" },
-                { v: "commented", l: "Well-commented" },
-                { v: "playful", l: "Playful — bold visuals" },
+                { v: "modern", l: "Modern — semantic, solid colors & glassmorphism" },
+                { v: "minimal", l: "Minimal — clean and lightweight" },
+                { v: "commented", l: "Well-commented — educational" },
+                { v: "playful", l: "Playful — rich micro-interactions" },
               ]} />
               <SelectField label="Model" value={model} onChange={setModel} options={MODELS.map((m) => ({ v: m.id, l: m.label }))} />
 
               <div className="flex gap-2 pt-2">
-                <button onClick={saveAi} disabled={saving} className="rounded-lg gradient-brand px-4 py-2 text-sm font-medium text-primary-foreground shadow-lift disabled:opacity-50">Save</button>
-                <button onClick={resetAi} className="rounded-lg glass px-4 py-2 text-sm font-medium hover:bg-surface">Reset to defaults</button>
+                <button onClick={saveAi} disabled={saving} className="rounded-lg gradient-brand px-4 py-2 text-sm font-medium text-primary-foreground shadow-lift disabled:opacity-50">
+                  Save
+                </button>
+                <button onClick={resetAi} className="rounded-lg glass px-4 py-2 text-sm font-medium hover:bg-surface">
+                  Reset to defaults
+                </button>
               </div>
             </div>
           )}
@@ -227,15 +287,16 @@ function SettingsPage() {
   );
 }
 
-function TextField({ label, value, onChange, disabled }: { label: string; value: string; onChange?: (v: string) => void; disabled?: boolean }) {
+function TextField({ label, value, onChange, placeholder, disabled }: { label: string; value: string; onChange?: (v: string) => void; placeholder?: string; disabled?: boolean }) {
   return (
     <label className="block">
       <span className="text-sm font-medium">{label}</span>
       <input
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder}
         disabled={disabled}
-        className="mt-1 w-full rounded-lg bg-input border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-60"
+        className="mt-1 w-full rounded-xl bg-input border border-border px-3.5 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-60"
       />
     </label>
   );
@@ -248,7 +309,7 @@ function SelectField({ label, value, onChange, options }: { label: string; value
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg bg-input text-foreground border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+        className="mt-1 w-full rounded-xl bg-input text-foreground border border-border px-3.5 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
       >
         {options.map((o) => (
           <option key={o.v} value={o.v} className="bg-background text-foreground">

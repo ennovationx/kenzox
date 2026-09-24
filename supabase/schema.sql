@@ -304,3 +304,69 @@ CREATE INDEX IF NOT EXISTS idx_shares_email ON public.project_shares(lower(invit
 
 -- ▸ 15. Enable Realtime for notifications
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
+-- ▸ 16. User API Keys (BYOK - Bring Your Own Key)
+CREATE TABLE public.user_api_keys (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  label text NOT NULL DEFAULT 'My Gemini API Key',
+  api_key text NOT NULL,
+  priority integer NOT NULL DEFAULT 1,
+  is_active boolean NOT NULL DEFAULT true,
+  exhausted_at timestamptz,
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_api_keys TO authenticated;
+GRANT ALL ON public.user_api_keys TO service_role;
+ALTER TABLE public.user_api_keys ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "users manage own api keys" ON public.user_api_keys FOR ALL TO authenticated
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE TRIGGER user_api_keys_updated BEFORE UPDATE ON public.user_api_keys
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- ▸ 17. Daily Prompt Usage (3 giveaway prompts/day from admin pool for non-admins)
+CREATE TABLE public.daily_prompt_usage (
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  usage_date date NOT NULL DEFAULT CURRENT_DATE,
+  prompt_count integer NOT NULL DEFAULT 0,
+  last_prompt_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, usage_date)
+);
+GRANT SELECT, INSERT, UPDATE ON public.daily_prompt_usage TO authenticated;
+GRANT ALL ON public.daily_prompt_usage TO service_role;
+ALTER TABLE public.daily_prompt_usage ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "users view own daily usage" ON public.daily_prompt_usage FOR SELECT TO authenticated
+  USING (auth.uid() = user_id);
+
+-- ▸ 18. GitHub Integration
+CREATE TABLE public.github_connections (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  access_token text NOT NULL,
+  github_username text,
+  account_name text,
+  avatar_url text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT ON public.github_connections TO authenticated;
+GRANT ALL ON public.github_connections TO service_role;
+ALTER TABLE public.github_connections ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "users view own github connection" ON public.github_connections FOR SELECT TO authenticated
+  USING (auth.uid() = user_id);
+
+CREATE TABLE public.github_oauth_states (
+  state text PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT ALL ON public.github_oauth_states TO service_role;
+ALTER TABLE public.github_oauth_states ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "github oauth states service role only" ON public.github_oauth_states FOR ALL TO authenticated
+  USING (false) WITH CHECK (false);

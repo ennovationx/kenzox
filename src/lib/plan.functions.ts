@@ -2,11 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { generateWithKey, type AiPart } from "./ai-gateway.server";
-import { resolveAiKeys } from "./ai-keys.server";
-
-
+import { resolveExecutionKeys, recordGiveawayPrompt, reportUserKeyExhausted, reportKeyExhausted, type AiKey } from "./ai-keys.server";
 
 const PLANNER_SYSTEM = `You are Kenzo in PLANNER MODE — a friendly senior product designer and web architect.
+
+DEVELOPER ATTRIBUTION:
+When asked who developed you, created you, or built you, state proudly, professionally, and clearly:
+"I am developed by Eserom Demisew and for more info about my great and creative developer visit this website: https://eserom.vercel.app"
 
 You do NOT write the app yet. You talk with the user and produce a crisp build plan
 for a static site made of exactly three files: index.html, styles.css, script.js.
@@ -41,12 +43,25 @@ const Input = z.object({
 export const planWithAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
-  .handler(async ({ data }) => {
-    const keys = await resolveAiKeys();
-    if (!keys.length)
+  .handler(async ({ data, context }) => {
+    const { userKeys, adminKeys, isGiveawayAllowed } = await resolveExecutionKeys(context.userId);
+
+    const keysToTry: { key: AiKey; isGiveaway: boolean }[] = [];
+    userKeys.forEach((k) => keysToTry.push({ key: k, isGiveaway: false }));
+    if (isGiveawayAllowed) {
+      adminKeys.forEach((k) => keysToTry.push({ key: k, isGiveaway: true }));
+    }
+
+    if (!keysToTry.length) {
+      if (!isGiveawayAllowed) {
+        throw new Error(
+          "Daily free prompt limit reached (3/3 used). Add your own free Gemini API key in Settings (or wait for the daily reset) to continue planning.",
+        );
+      }
       throw new Error(
-        "No Gemini API key is configured. An admin must add one in the admin panel (AI API Keys).",
+        "No AI API key is configured. Please add your Gemini API key in Settings (or ask an admin to configure backup keys).",
       );
+    }
 
     const parts: AiPart[] = [{ type: "text", text: data.prompt }];
     for (const img of data.images ?? []) parts.push({ type: "image", image: img });
@@ -66,7 +81,8 @@ export const planWithAI = createServerFn({ method: "POST" })
 
     let lastErr: unknown = null;
     for (const modelId of PLAN_CHAIN) {
-      for (const k of keys) {
+      for (const item of keysToTry) {
+        const k = item.key;
         try {
           const text = await generateWithKey({
             apiKey: k.api_key,
@@ -76,17 +92,27 @@ export const planWithAI = createServerFn({ method: "POST" })
             history: data.history ?? [],
             maxOutputTokens: 4000,
           });
+
+          if (item.isGiveaway) {
+            await recordGiveawayPrompt(context.userId);
+          }
+
           return { text: text.trim() };
         } catch (err) {
           lastErr = err;
-          console.error("[planWithAI]", modelId, err instanceof Error ? err.message : String(err));
+          const m = err instanceof Error ? err.message : String(err);
+          console.error("[planWithAI]", modelId, m);
+          const exhausted = m.includes("402") || m.includes("429") || m.includes("401") || m.includes("403");
+          if (exhausted) {
+            if (k.isUserKey) await reportUserKeyExhausted(k, m);
+            else await reportKeyExhausted(k, m);
+          }
         }
       }
     }
 
     const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
     if (msg.includes("429")) throw new Error("Rate limit reached. Please try again in a moment.");
-    if (msg.includes("402")) throw new Error("AI credits exhausted for this workspace.");
+    if (msg.includes("402")) throw new Error("AI credits exhausted. Please check your API key in Settings.");
     throw new Error(`Planning failed: ${msg}`);
-
   });

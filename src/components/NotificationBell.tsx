@@ -20,12 +20,25 @@ function timeAgo(iso: string) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+function getStoredSeen(): Set<string> {
+  try {
+    const raw = localStorage.getItem("kenzo:seenNotifs");
+    return raw ? new Set(JSON.parse(raw)) : new Set<string>();
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function persistSeen(set: Set<string>) {
+  try {
+    localStorage.setItem("kenzo:seenNotifs", JSON.stringify(Array.from(set).slice(-300)));
+  } catch {}
+}
+
 export function NotificationBell({ userId }: { userId: string | null }) {
   const [items, setItems] = useState<Notif[]>([]);
   const [open, setOpen] = useState(false);
-  /** Ids already marked read in this session — never counted again, even if a
-   *  realtime refresh briefly returns a stale row. */
-  const seen = useRef<Set<string>>(new Set());
+  const seen = useRef<Set<string>>(getStoredSeen());
   const bellRef = useRef<HTMLButtonElement | null>(null);
 
   const unread = items.filter((n) => !n.read && !seen.current.has(n.id)).length;
@@ -36,6 +49,7 @@ export function NotificationBell({ userId }: { userId: string | null }) {
       .select("id, type, title, body, read, created_at")
       .order("created_at", { ascending: false })
       .limit(30);
+
     const rows = ((data ?? []) as Notif[]).map((n) =>
       seen.current.has(n.id) ? { ...n, read: true } : n,
     );
@@ -63,6 +77,7 @@ export function NotificationBell({ userId }: { userId: string | null }) {
     const list = ids ?? items.filter((n) => !n.read).map((n) => n.id);
     if (!list.length) return;
     list.forEach((id) => seen.current.add(id));
+    persistSeen(seen.current);
     setItems((prev) => prev.map((n) => (list.includes(n.id) ? { ...n, read: true } : n)));
     await supabase.from("notifications").update({ read: true }).in("id", list);
   }
@@ -76,8 +91,6 @@ export function NotificationBell({ userId }: { userId: string | null }) {
     }
   }
 
-  // Portal-rendered panel: escapes all parent stacking contexts (e.g. glass
-  // backdrop-filter) so it renders on top of the chat composer and everything else.
   const panel = open
     ? createPortal(
         <div className="fixed inset-0 z-[9999]" role="dialog" aria-label="Notifications">
@@ -86,7 +99,7 @@ export function NotificationBell({ userId }: { userId: string | null }) {
             <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border bg-background/80">
               <span className="text-sm font-semibold">Notifications</span>
               <div className="flex items-center gap-1">
-                {items.some((n) => !n.read) && (
+                {items.some((n) => !n.read && !seen.current.has(n.id)) && (
                   <button onClick={() => markAll()} className="inline-flex items-center gap-1 text-xs text-primary hover:underline px-2 py-1">
                     <Check className="h-3 w-3" /> Mark all read
                   </button>
