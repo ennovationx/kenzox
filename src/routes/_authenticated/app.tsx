@@ -6,6 +6,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { Avatars, ShareDialog } from "@/components/ShareDialog";
 import { PublishMenu } from "@/components/PublishMenu";
 import { GithubMenu } from "@/components/GithubMenu";
+import { getGithubConnection, pushProjectToGithub } from "@/lib/github.functions";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { generateCode } from "@/lib/generate.functions";
@@ -155,23 +156,31 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-/** Minimal markdown → HTML for assistant plans. Never leaks raw ** or ## markers. */
+/** Minimal markdown → HTML for assistant messages and plans. Never leaks raw ** or ## markers, renders clickable links. */
 function md(text: string) {
-  const esc = (text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return esc
-    .replace(/```[a-z]*\n?([\s\S]*?)```/g, '<pre class="rounded-lg bg-input p-2 my-1 overflow-auto text-[11px]">$1</pre>')
-    .replace(/`([^`]+)`/g, '<code class="rounded bg-input px-1 py-0.5 text-[11px]">$1</code>')
-    .replace(/^#{4,}\s*(.*)$/gm, '<h4 class="font-semibold mt-2">$1</h4>')
-    .replace(/^###\s*(.*)$/gm, '<h4 class="font-semibold mt-2">$1</h4>')
-    .replace(/^##\s*(.*)$/gm, '<h3 class="font-semibold text-sm mt-3">$1</h3>')
-    .replace(/^#\s*(.*)$/gm, '<h3 class="font-semibold text-sm mt-3">$1</h3>')
-    .replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>")
-    .replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<em>$2</em>")
-    .replace(/^\s*\d+\.\s+(.*)$/gm, '<li class="ml-4 list-decimal">$1</li>')
-    .replace(/^\s*[-*•]\s+(.*)$/gm, '<li class="ml-4 list-disc">$1</li>')
-    .replace(/\*+/g, "") // drop any stray asterisks the model left behind
-    .replace(/\n/g, "<br/>");
+  let esc = (text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  esc = esc.replace(/```[a-z]*\n?([\s\S]*?)```/g, '<pre class="rounded-lg bg-input p-2.5 my-1.5 overflow-auto text-[11px] font-mono">$1</pre>');
+  esc = esc.replace(/`([^`]+)`/g, '<code class="rounded bg-input px-1 py-0.5 text-[11px] font-mono">$1</code>');
+  esc = esc.replace(/^#{4,}\s*(.*)$/gm, '<h4 class="font-semibold mt-2">$1</h4>');
+  esc = esc.replace(/^###\s*(.*)$/gm, '<h4 class="font-semibold mt-2">$1</h4>');
+  esc = esc.replace(/^##\s*(.*)$/gm, '<h3 class="font-semibold text-sm mt-3">$1</h3>');
+  esc = esc.replace(/^#\s*(.*)$/gm, '<h3 class="font-semibold text-sm mt-3">$1</h3>');
+  esc = esc.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>");
+  esc = esc.replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>");
+  esc = esc.replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<em>$2</em>");
+
+  // Markdown links: [text](https://...)
+  esc = esc.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '###LINK_START###$2###SEP###$1###LINK_END###');
+  // Raw URLs: (only if not preceded by token)
+  esc = esc.replace(/(^|[\s(]|&gt;)(https?:\/\/[^\s<)]+)/g, '$1###LINK_START###$2###SEP###$2###LINK_END###');
+  // Convert link tokens to clickable <a> tags
+  esc = esc.replace(/###LINK_START###(.*?)###SEP###(.*?)###LINK_END###/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary underline font-medium hover:opacity-80 inline-flex items-center gap-1">$2</a>');
+
+  esc = esc.replace(/^\s*\d+\.\s+(.*)$/gm, '<li class="ml-4 list-decimal">$1</li>');
+  esc = esc.replace(/^\s*[-*•]\s+(.*)$/gm, '<li class="ml-4 list-disc">$1</li>');
+  esc = esc.replace(/\*+/g, ""); // drop any stray asterisks the model left behind
+  esc = esc.replace(/\n/g, "<br/>");
+  return esc;
 }
 
 function Workspace() {
@@ -190,6 +199,27 @@ function Workspace() {
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const isTyping = typing !== null && typing.file === activeFile;
   const editorValue: string = isTyping ? typing!.text : files[activeFile];
+
+  const checkGithubConnection = useServerFn(getGithubConnection);
+  const pushToGithubServerFn = useServerFn(pushProjectToGithub);
+  const [githubMenuOpen, setGithubMenuOpen] = useState(false);
+  const [githubRepoUrl, setGithubRepoUrl] = useState<string | null>(null);
+  const [githubRepoName, setGithubRepoName] = useState<string | null>(null);
+
+  async function handleGithubPushed(repoUrl: string, repoFullName: string) {
+    setGithubRepoUrl(repoUrl);
+    setGithubRepoName(repoFullName);
+    if (!activeId) return;
+
+    const asst: Msg = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: `🎉 **Successfully pushed to GitHub!**\n\nHere is your live GitHub repository URL:\n🔗 [${repoUrl}](${repoUrl})\n\n• **Repository:** \`${repoFullName}\`\n• **Clone Command:**\n\`\`\`bash\ngit clone ${repoUrl}.git\n\`\`\`\n• All files (\`index.html\`, \`styles.css\`, \`script.js\`, and \`README.md\`) have been synchronized to GitHub.`,
+      mode: "build",
+    };
+    setMessages((m) => [...m, asst]);
+    await persistMsg(activeId, asst);
+  }
 
   /** Reveal freshly generated code in the editor with a live typing effect. */
   const animateCode = async (next: Files) => {
@@ -560,6 +590,96 @@ function Workspace() {
     await persistMsg(projectId, userMsg);
 
     try {
+      const isGithubPushRequest =
+        /\b(push|sync|export|upload|commit|send)\b.*\b(github|repo|repository)\b/i.test(prompt) ||
+        /\b(github)\b.*\b(push|sync|export|repo|repository|url|link)\b/i.test(prompt) ||
+        /\b(give|show|what is|get|where is)\b.*\b(github)\b.*\b(url|link|repo)\b/i.test(prompt);
+
+      if (isGithubPushRequest) {
+        if (githubRepoUrl && /\b(url|link|what is|give|show|where)\b/i.test(prompt) && !/\b(push|sync|export|re-push)\b/i.test(prompt)) {
+          const asst: Msg = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `Here is your GitHub repository URL:\n🔗 [${githubRepoUrl}](${githubRepoUrl})\n\n• **Repository:** \`${githubRepoName || "GitHub Repository"}\`\n• **Clone:** \`git clone ${githubRepoUrl}.git\``,
+            mode: "build",
+          };
+          setMessages((m) => [...m, asst]);
+          await persistMsg(projectId, asst);
+          stopSteps();
+          setBusy(false);
+          return;
+        }
+
+        try {
+          const ghConn = await checkGithubConnection();
+          if (!ghConn.connected) {
+            setGithubMenuOpen(true);
+            const asst: Msg = {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: `⚠️ **GitHub is not connected yet.**\n\nTo push this project to your GitHub and get your live repository URL:\n1. Click **Connect GitHub Account** in the dialog that just opened (or click the GitHub icon in the top toolbar).\n2. Once connected, prompt me again: **"push to github"**, and I will automatically commit your project and provide the live repository URL!`,
+              mode: "build",
+            };
+            setMessages((m) => [...m, asst]);
+            await persistMsg(projectId, asst);
+            return;
+          }
+
+          const slug = (projectName || "kenzo-app")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+
+          toast.info("Pushing to your GitHub account...");
+          const res = await pushToGithubServerFn({
+            data: {
+              projectId,
+              repoName: slug || "kenzo-app",
+              isNew: true,
+              isPrivate: false,
+              description: `${projectName} — built with Kenzo AI`,
+            },
+          });
+
+          setGithubRepoUrl(res.repoUrl);
+          setGithubRepoName(res.repoFullName);
+
+          toast.success(`Pushed to GitHub: ${res.repoFullName}`, {
+            description: res.repoUrl,
+            action: {
+              label: "Open Repo",
+              onClick: () => window.open(res.repoUrl, "_blank"),
+            },
+          });
+
+          const asst: Msg = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `🎉 **Successfully pushed to GitHub!**\n\nHere is your live GitHub repository URL:\n🔗 [${res.repoUrl}](${res.repoUrl})\n\n• **Repository:** \`${res.repoFullName}\`\n• **Clone Command:**\n\`\`\`bash\ngit clone ${res.repoUrl}.git\n\`\`\`\n• All files (\`index.html\`, \`styles.css\`, \`script.js\`, and \`README.md\`) have been committed directly to your GitHub repository.`,
+            mode: "build",
+          };
+          setMessages((m) => [...m, asst]);
+          await persistMsg(projectId, asst);
+          return;
+        } catch (ghErr: any) {
+          const errMsg = ghErr?.message || "Failed to push to GitHub";
+          toast.error(errMsg);
+          const asst: Msg = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `⚠️ **GitHub push encountered an issue:** ${errMsg}\n\nYou can also click the **GitHub** icon in the header toolbar to configure repository details and retry.`,
+            mode: "build",
+          };
+          setMessages((m) => [...m, asst]);
+          await persistMsg(projectId, asst);
+          return;
+        } finally {
+          stopSteps();
+          setBusy(false);
+          inputRef.current?.focus();
+        }
+      }
+
       if (mode === "plan") {
         const r = await plan({
           data: {
@@ -1360,7 +1480,13 @@ function Workspace() {
                 >
                   <Camera className="h-4 w-4" />
                 </button>
-                <GithubMenu projectId={activeId} projectName={projectName} />
+                <GithubMenu
+                  projectId={activeId}
+                  projectName={projectName}
+                  isOpen={githubMenuOpen}
+                  onOpenChange={setGithubMenuOpen}
+                  onPushed={handleGithubPushed}
+                />
                 <PublishMenu projectId={activeId} />
                 {rightTab === "preview" && (
                   <div className="hidden md:flex gap-1 rounded-lg bg-input p-1 mr-1">

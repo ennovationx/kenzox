@@ -15,16 +15,29 @@ import {
   Check,
   X,
   UploadCloud,
+  Copy,
 } from "lucide-react";
 
 export function GithubMenu({
   projectId,
   projectName,
+  isOpen,
+  onOpenChange,
+  onPushed,
 }: {
   projectId: string | null;
   projectName: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onPushed?: (repoUrl: string, repoFullName: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isOpen !== undefined ? isOpen : internalOpen;
+  const setOpen = (val: boolean) => {
+    setInternalOpen(val);
+    onOpenChange?.(val);
+  };
+
   const [loading, setLoading] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -92,7 +105,14 @@ export function GithubMenu({
       });
 
       setLastPushedUrl(res.repoUrl);
-      toast.success(`Pushed to GitHub: ${res.repoFullName}`);
+      toast.success(`Pushed to GitHub: ${res.repoFullName}`, {
+        description: res.repoUrl,
+        action: {
+          label: "Open Repo",
+          onClick: () => window.open(res.repoUrl, "_blank"),
+        },
+      });
+      onPushed?.(res.repoUrl, res.repoFullName);
     } catch (e: any) {
       toast.error(e?.message || "Failed to push to GitHub");
     } finally {
@@ -166,18 +186,44 @@ export function GithubMenu({
                 </div>
 
                 {lastPushedUrl ? (
-                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 text-center space-y-3">
-                    <p className="text-sm font-medium text-foreground">
-                      🎉 Repository updated successfully!
-                    </p>
-                    <a
-                      href={lastPushedUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                    >
-                      View on GitHub <ExternalLink className="h-3 w-3" />
-                    </a>
+                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 space-y-2.5 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1.5">
+                        <Check className="h-3.5 w-3.5" /> Live GitHub Repository
+                      </span>
+                      <a
+                        href={lastPushedUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                      >
+                        Open <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-1.5 p-2 rounded-lg bg-surface border border-glass-border">
+                      <input
+                        readOnly
+                        value={lastPushedUrl}
+                        className="flex-1 bg-transparent text-xs text-foreground outline-none font-mono selection:bg-primary/30 select-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(lastPushedUrl);
+                          toast.success("GitHub repository URL copied!");
+                        }}
+                        className="p-1.5 rounded-md hover:bg-input text-primary hover:text-primary-foreground transition active:scale-95"
+                        title="Copy repository URL"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                      <span>Clone with Git:</span>
+                      <code className="px-1.5 py-0.5 rounded bg-surface border border-glass-border font-mono text-[10px] text-foreground selection:bg-primary/30">
+                        git clone {lastPushedUrl}.git
+                      </code>
+                    </div>
                   </div>
                 ) : null}
 

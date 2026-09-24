@@ -193,7 +193,7 @@ export const pushProjectToGithub = createServerFn({ method: "POST" })
       user_id: context.userId,
       type: "github",
       title: "Pushed to GitHub",
-      body: `Successfully pushed "${project.name}" to ${targetOwner}/${targetRepoName}.`,
+      body: `Successfully pushed "${project.name}" to GitHub: ${res.htmlUrl}`,
     });
 
     return {
