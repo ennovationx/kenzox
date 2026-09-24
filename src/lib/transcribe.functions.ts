@@ -33,12 +33,15 @@ export const transcribeAudio = createServerFn({ method: "POST" })
       candidateKeys.push(process.env.GEMINI_API_KEY);
     }
 
-    const baseMime = data.mime.split(";")[0] || "audio/wav";
+    const baseMime = (data.mime ? data.mime.split(";")[0].trim() : "") || "audio/wav";
+    const cleanAudio = data.audio.replace(/\s+/g, "");
+
     const modelsToTry = [
-      "gemini-2.5-flash",
+      "gemini-3.5-flash-lite",
       "gemini-flash-latest",
+      "gemini-3.7-flash",
+      "gemini-2.5-flash",
       "gemini-2.0-flash",
-      "gemini-2.5-flash-lite",
     ];
 
     let lastError: unknown = null;
@@ -47,43 +50,58 @@ export const transcribeAudio = createServerFn({ method: "POST" })
     for (const key of candidateKeys) {
       for (const model of modelsToTry) {
         try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-            {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                "x-goog-api-key": key.trim(),
-              },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    role: "user",
-                    parts: [
-                      {
-                        inline_data: {
-                          mime_type: baseMime,
-                          data: data.audio,
-                        },
-                      },
-                      {
-                        text: "Transcribe this voice audio recording verbatim into text with accurate spelling and punctuation. Return ONLY the transcribed words. Do not add any preface, quotes, timestamps, or markdown.",
-                      },
-                    ],
-                  },
-                ],
-                generationConfig: {
-                  temperature: 0.1,
-                  maxOutputTokens: 2048,
+          const makeRequest = async (targetModel: string) => {
+            return await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`,
+              {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  "x-goog-api-key": key.trim(),
                 },
-              }),
-            }
-          );
+                body: JSON.stringify({
+                  contents: [
+                    {
+                      role: "user",
+                      parts: [
+                        {
+                          inline_data: {
+                            mime_type: baseMime,
+                            data: cleanAudio,
+                          },
+                        },
+                        {
+                          text: "Transcribe this voice audio recording verbatim into text with accurate spelling and punctuation. Return ONLY the transcribed words. Do not add any preface, quotes, timestamps, or markdown.",
+                        },
+                      ],
+                    },
+                  ],
+                  generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 2048,
+                  },
+                }),
+              }
+            );
+          };
+
+          let res = await makeRequest(model);
 
           if (!res.ok) {
             const raw = await res.text();
             lastError = new Error(`Gemini ${res.status}: ${raw.slice(0, 200)}`);
-            continue;
+            // If Google 404 suggests a newer model (e.g. gemini-3.5-flash-lite), try it immediately
+            const suggested = raw.match(/use\s+models\/([a-z0-9.\-]+)/i)?.[1];
+            if (suggested && suggested !== model) {
+              const retryRes = await makeRequest(suggested);
+              if (retryRes.ok) {
+                res = retryRes;
+              } else {
+                continue;
+              }
+            } else {
+              continue;
+            }
           }
 
           const json = await res.json();

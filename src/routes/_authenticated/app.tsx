@@ -23,6 +23,7 @@ import {
   ClipboardList, Image as ImageIcon, MessageSquare, FolderTree, Camera, AlertTriangle,
   Coffee, CheckSquare, Briefcase, BarChart3, Gamepad2, Headphones, UtensilsCrossed,
   Flame, TrendingUp, Compass, Dumbbell, Shuffle, ArrowUpRight, Rocket, Wand2, Eye,
+  Code2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -2141,18 +2142,13 @@ function Workspace() {
       />
 
       {recording && (
-        <div className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-destructive/15 border border-destructive/30 flex items-center justify-between text-xs text-destructive animate-pulse">
-          <span className="flex items-center gap-2 font-medium">
-            <span className="h-2 w-2 rounded-full bg-destructive animate-ping" />
-            Listening... Speak your prompt naturally
-          </span>
-          <button
-            type="button"
-            onClick={() => void stopRecording()}
-            className="px-2 py-0.5 rounded-md bg-destructive text-destructive-foreground font-semibold hover:opacity-90 active:scale-95 text-[11px]"
-          >
-            Done Speaking
-          </button>
+        <div
+          onClick={() => void stopRecording()}
+          className="mx-3 mb-2 px-3 py-1.5 rounded-xl bg-destructive/15 border border-destructive/30 flex items-center gap-2 text-xs text-destructive animate-pulse cursor-pointer hover:bg-destructive/20 transition"
+          title="Click to finish speaking"
+        >
+          <span className="h-2 w-2 rounded-full bg-destructive animate-ping shrink-0" />
+          <span className="font-medium">Listening... Speak your prompt naturally (click to finish)</span>
         </div>
       )}
       {transcribing && (
