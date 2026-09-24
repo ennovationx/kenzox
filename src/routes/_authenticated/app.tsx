@@ -1538,187 +1538,171 @@ function Workspace() {
     }
   }
 
-  function openExternalPreview() {
-    const w = window.open("", "_blank");
-    if (!w) {
-      toast.error("Popup blocked — please allow popups for external preview");
-      return;
-    }
-    const currentDoc = buildSrcDoc(files);
-    const projTitle = projectName || "Kenzo App";
+  function injectExternalPublishButton(html: string, projTitle: string): string {
+    const fabAndModal = `
+<style id="__kenzo_deploy_style">
+  .kenzo-deploy-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 2147483647;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+    color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5), 0 2px 8px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .kenzo-deploy-fab:hover {
+    transform: scale(1.1) translateY(-2px);
+    box-shadow: 0 14px 36px rgba(99, 102, 241, 0.7);
+  }
+  .kenzo-deploy-fab:active {
+    transform: scale(0.95);
+  }
+  .kenzo-modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    z-index: 2147483647;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .kenzo-modal-box {
+    background: #141622;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 16px;
+    max-width: 420px;
+    width: 100%;
+    padding: 24px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: left;
+  }
+  .kenzo-modal-box h3 { font-size: 18px; font-weight: 700; margin: 0 0 6px 0; color: #fff; }
+  .kenzo-modal-box p { font-size: 13px; color: #94a3b8; margin: 0 0 18px 0; line-height: 1.5; }
+  .kenzo-opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .kenzo-opt:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: #6366f1;
+  }
+  .kenzo-opt strong { display: block; font-size: 14px; color: #fff; margin-bottom: 2px; }
+  .kenzo-opt span { display: block; font-size: 11px; color: #94a3b8; }
+  .kenzo-close {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 6px;
+    transition: all 0.2s;
+  }
+  .kenzo-close:hover { color: #fff; background: rgba(255,255,255,0.14); }
+</style>
 
-    const externalHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${projTitle} — Live Preview | Kenzo</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-      position: relative;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: block;
-    }
-    .deploy-float-btn {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 999999;
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .deploy-float-btn:hover {
-      transform: scale(1.1) translateY(-2px);
-      box-shadow: 0 12px 32px rgba(99, 102, 241, 0.65);
-    }
-    .deploy-float-btn:active {
-      transform: scale(0.95);
-    }
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.75);
-      backdrop-filter: blur(6px);
-      z-index: 1000000;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .modal-card {
-      background: #181a24;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 16px;
-      max-width: 440px;
-      width: 100%;
-      padding: 24px;
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6);
-      text-align: left;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    .modal-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-    .modal-desc { font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px; }
-    .deploy-option {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      margin-bottom: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .deploy-option:hover {
-      background: rgba(255,255,255,0.08);
-      border-color: #6366f1;
-    }
-    .deploy-btn-text { font-size: 14px; font-weight: 600; color: #fff; }
-    .deploy-btn-sub { font-size: 11px; color: #94a3b8; }
-    .close-btn {
-      width: 100%;
-      padding: 10px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: #94a3b8;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      margin-top: 8px;
-    }
-    .close-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
-  </style>
-</head>
-<body>
-  <iframe id="liveFrame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"></iframe>
-  
-  <button class="deploy-float-btn" onclick="openPublishModal()" title="Publish & Deploy Website">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
-  </button>
+<button class="kenzo-deploy-fab" id="__kenzo_fab" title="Deploy / Publish Website" onclick="document.getElementById('__kenzo_modal').style.display='flex'">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+</button>
 
-  <div id="publishModal" class="modal-overlay" onclick="if(event.target===this)closePublishModal()">
-    <div class="modal-card">
-      <h3 class="modal-title">Publish Website</h3>
-      <p class="modal-desc">Launch your website live on global Edge CDN or push all code to GitHub.</p>
-      
-      <div class="deploy-option" onclick="deployNetlify()">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#25c2a0" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
-        <div>
-          <div class="deploy-btn-text">Publish to Netlify</div>
-          <div class="deploy-btn-sub">Instant live public URL & SSL hosting</div>
-        </div>
+<div class="kenzo-modal-bg" id="__kenzo_modal" onclick="if(event.target===this)this.style.display='none'">
+  <div class="kenzo-modal-box">
+    <h3>Publish Website</h3>
+    <p>Deploy your website live on global Edge CDN or push all code to GitHub.</p>
+    <div class="kenzo-opt" onclick="kenzoDeployNetlify()">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#25c2a0" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+      <div>
+        <strong>Publish to Netlify</strong>
+        <span>Instant live public URL & SSL hosting</span>
       </div>
-
-      <div class="deploy-option" onclick="deployGithub()">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
-        <div>
-          <div class="deploy-btn-text">Push to GitHub</div>
-          <div class="deploy-btn-sub">Sync files to your GitHub repository</div>
-        </div>
-      </div>
-
-      <button class="close-btn" onclick="closePublishModal()">Close</button>
     </div>
+    <div class="kenzo-opt" onclick="kenzoDeployGithub()">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+      <div>
+        <strong>Push to GitHub</strong>
+        <span>Sync files to your GitHub repository</span>
+      </div>
+    </div>
+    <button class="kenzo-close" onclick="document.getElementById('__kenzo_modal').style.display='none'">Close</button>
   </div>
-
-  <script>
-    var currentDoc = ${JSON.stringify(currentDoc)};
-    var iframe = document.getElementById('liveFrame');
-    iframe.srcdoc = currentDoc;
-
-    function openPublishModal() {
-      document.getElementById('publishModal').style.display = 'flex';
+</div>
+<script>
+  function kenzoDeployNetlify() {
+    document.getElementById('__kenzo_modal').style.display='none';
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ __kenzo_open_publish: true }, '*');
+      window.opener.focus();
+    } else {
+      alert('Return to the Kenzo workspace tab to complete Netlify deployment.');
     }
-    function closePublishModal() {
-      document.getElementById('publishModal').style.display = 'none';
+  }
+  function kenzoDeployGithub() {
+    document.getElementById('__kenzo_modal').style.display='none';
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ __kenzo_open_github: true }, '*');
+      window.opener.focus();
+    } else {
+      alert('Return to the Kenzo workspace tab to push to GitHub.');
     }
-    function deployNetlify() {
-      closePublishModal();
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ __kenzo_open_publish: true }, '*');
-        window.opener.focus();
-      } else {
-        alert('Please open Kenzo workspace tab to deploy to Netlify.');
+  }
+</script>
+`;
+
+    if (/<\/body>/i.test(html)) {
+      return html.replace(/<\/body>/i, fabAndModal + "</body>");
+    }
+    return html + fabAndModal;
+  }
+
+  function openExternalPreview() {
+    try {
+      const cleanDoc = buildSrcDoc(files);
+      const projTitle = projectName || "Kenzo App";
+      const fullDoc = injectExternalPublishButton(cleanDoc, projTitle);
+
+      const blob = new Blob([fullDoc], { type: "text/html;charset=utf-8" });
+      const blobUrl = URL.createObjectURL(blob);
+      const w = window.open(blobUrl, "_blank");
+
+      if (!w) {
+        const fallback = window.open("", "_blank");
+        if (fallback) {
+          fallback.document.open();
+          fallback.document.write(fullDoc);
+          fallback.document.close();
+        } else {
+          toast.error("Popup blocked — please allow popups for external preview");
+        }
       }
+    } catch {
+      toast.error("Could not launch external preview");
     }
-    function deployGithub() {
-      closePublishModal();
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ __kenzo_open_github: true }, '*');
-        window.opener.focus();
-      } else {
-        alert('Please open Kenzo workspace tab to push to GitHub.');
-      }
-    }
-  </script>
-</body>
-</html>`;
-
-    w.document.open();
-    w.document.write(externalHtml);
-    w.document.close();
   }
 
   async function copyActiveFile() {
