@@ -21,6 +21,8 @@ import {
   Monitor, Tablet, Smartphone, ChevronDown, FileArchive, Copy, Mic, Square,
   ImagePlus, Terminal, History, ThumbsUp, ThumbsDown, Pencil, Check, Hammer,
   ClipboardList, Image as ImageIcon, MessageSquare, FolderTree, Camera, AlertTriangle,
+  Coffee, CheckSquare, Briefcase, BarChart3, Gamepad2, Headphones, UtensilsCrossed,
+  Flame, TrendingUp, Compass, Dumbbell, Shuffle, ArrowUpRight,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -56,6 +58,127 @@ const DEFAULT_FILES: Files = {
 };
 
 const MAX_CHARS = 6000;
+
+type PromptIdea = {
+  id: string;
+  title: string;
+  badge: string;
+  subtitle: string;
+  prompt: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+};
+
+const PROMPT_IDEAS: PromptIdea[] = [
+  {
+    id: "coffee",
+    title: "Landing page for a coffee shop",
+    badge: "Food & Drink",
+    subtitle: "Artisan roastery with warm aesthetic, roast menu & online ordering",
+    prompt: "Landing page for an artisan coffee shop with dark warm aesthetics, interactive coffee roast menu, brewing guide, customer reviews, and a smooth table reservation & pickup ordering modal.",
+    icon: Coffee,
+    color: "from-amber-500/20 to-orange-500/10 text-amber-400 border-amber-500/30",
+  },
+  {
+    id: "todo",
+    title: "Interactive todo list with dark mode",
+    badge: "Productivity",
+    subtitle: "Kanban task manager with priority tags, filters & local storage",
+    prompt: "Interactive todo list with dark mode toggle, priority badges, category filtering (Work, Personal, Urgent), search, smooth completion animations, and localStorage persistence.",
+    icon: CheckSquare,
+    color: "from-emerald-500/20 to-teal-500/10 text-emerald-400 border-emerald-500/30",
+  },
+  {
+    id: "portfolio",
+    title: "Portfolio with hero and projects grid",
+    badge: "Showcase",
+    subtitle: "Creative developer portfolio with live preview modal & skills badges",
+    prompt: "Portfolio with hero and projects grid, interactive case studies with image preview modals, tech stack pill badges, client testimonials, and a sleek contact form.",
+    icon: Briefcase,
+    color: "from-blue-500/20 to-indigo-500/10 text-blue-400 border-blue-500/30",
+  },
+  {
+    id: "dashboard",
+    title: "SaaS Analytics Dashboard",
+    badge: "Business",
+    subtitle: "Live revenue metrics, SVG chart widgets, user growth & recent activity",
+    prompt: "Modern dark-themed SaaS analytics dashboard with interactive SVG revenue chart, MRR/churn metric cards with trend indicators, recent user activity table, and date range filters.",
+    icon: BarChart3,
+    color: "from-violet-500/20 to-purple-500/10 text-violet-400 border-violet-500/30",
+  },
+  {
+    id: "arcade",
+    title: "Retro Arcade Mini-Games",
+    badge: "Gaming",
+    subtitle: "Playable 8-bit games, canvas animations, sound effects & leaderboard",
+    prompt: "Retro neon arcade web app featuring playable mini-games (Snake and Pong), dynamic canvas renderer, Web Audio API sound effects, high score leaderboard, and CRT scanline filter.",
+    icon: Gamepad2,
+    color: "from-fuchsia-500/20 to-pink-500/10 text-fuchsia-400 border-fuchsia-500/30",
+  },
+  {
+    id: "lofi",
+    title: "Lo-Fi Focus & Soundboard",
+    badge: "Audio & Focus",
+    subtitle: "Layered rain, vinyl & café sounds with pomodoro focus timer",
+    prompt: "Lo-Fi focus soundboard with synthesised ambient sounds (rain, campfire, vinyl crackle, waves) using Web Audio API, volume sliders for each track, a built-in Pomodoro timer, and calming animated visualizer.",
+    icon: Headphones,
+    color: "from-indigo-500/20 to-cyan-500/10 text-indigo-400 border-indigo-500/30",
+  },
+  {
+    id: "food",
+    title: "Gourmet Food Delivery App",
+    badge: "E-Commerce",
+    subtitle: "Dish cards, dietary filters, interactive cart & checkout drawer",
+    prompt: "Modern food delivery landing and ordering app with dietary filters (Vegan, Gluten-Free, Chef's Special), calorie/macro breakdown, interactive sliding cart drawer, and order tracking timeline.",
+    icon: UtensilsCrossed,
+    color: "from-rose-500/20 to-red-500/10 text-rose-400 border-rose-500/30",
+  },
+  {
+    id: "habits",
+    title: "Daily Habit & Streak Tracker",
+    badge: "Lifestyle",
+    subtitle: "GitHub-style activity heatmap, daily streaks & motivational badges",
+    prompt: "Addictive daily habit tracker featuring a GitHub-style activity contribution grid, streak counters, milestone badges, daily reminder checklist, and confetti celebration on 100% completion.",
+    icon: Flame,
+    color: "from-amber-500/20 to-yellow-500/10 text-amber-400 border-amber-500/30",
+  },
+  {
+    id: "studio",
+    title: "AI Photo Studio & Editor",
+    badge: "Creative Tool",
+    subtitle: "Canvas image filters, crop tool, preset LUTs & instant download",
+    prompt: "In-browser photo studio with HTML5 canvas image editing: brightness, contrast, saturation, retro filters, sticker overlays, text watermark generator, and 1-click PNG export.",
+    icon: Sparkles,
+    color: "from-pink-500/20 to-purple-500/10 text-pink-400 border-pink-500/30",
+  },
+  {
+    id: "crypto",
+    title: "Live Market & Crypto Ticker",
+    badge: "FinTech",
+    subtitle: "Real-time simulated price candles, watchlist & portfolio calculator",
+    prompt: "Sleek financial market tracker with simulated real-time candlestick charts, multi-currency watchlist, 24h gainers/losers, profit/loss calculator, and breaking market news feed.",
+    icon: TrendingUp,
+    color: "from-emerald-500/20 to-cyan-500/10 text-emerald-400 border-emerald-500/30",
+  },
+  {
+    id: "travel",
+    title: "Interactive Travel Itinerary",
+    badge: "Travel",
+    subtitle: "Day-by-day journey timeline, packing checklist & budget estimator",
+    prompt: "Luxury travel planner with interactive day-by-day itinerary cards, destination weather widget, packing checklist with checkoff sound, expense splitting calculator, and photo gallery.",
+    icon: Compass,
+    color: "from-cyan-500/20 to-blue-500/10 text-cyan-400 border-cyan-500/30",
+  },
+  {
+    id: "fitness",
+    title: "HIIT & Workout Companion",
+    badge: "Health & Fitness",
+    subtitle: "Interval timer with voice cues, exercise animation cards & log",
+    prompt: "Fitness companion app featuring an automated HIIT interval countdown timer with audio beeps, animated exercise demonstration cards, reps/sets tracker, and rest-time stopwatch.",
+    icon: Dumbbell,
+    color: "from-orange-500/20 to-red-500/10 text-orange-400 border-orange-500/30",
+  },
+];
 
 const CONSOLE_BRIDGE = `<script>(function(){
   var send=function(level,args){try{parent.postMessage({__kenzo:1,level:level,text:Array.prototype.map.call(args,function(a){
@@ -318,8 +441,36 @@ function Workspace() {
   const [steps, setSteps] = useState<string[]>([]);
   const [thinkOpen, setThinkOpen] = useState(true);
   const [elapsed, setElapsed] = useState(0);
+  const [activeIdeaIndices, setActiveIdeaIndices] = useState<number[]>([0, 1, 2, 3]);
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const shuffleIdeas = useCallback(() => {
+    const total = PROMPT_IDEAS.length;
+    const indices: number[] = [];
+    while (indices.length < 4) {
+      const idx = Math.floor(Math.random() * total);
+      if (!indices.includes(idx)) indices.push(idx);
+    }
+    setActiveIdeaIndices(indices);
+  }, []);
+
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (stepTimer.current) clearInterval(stepTimer.current);
+    if (tickTimer.current) clearInterval(tickTimer.current);
+    stepTimer.current = null;
+    tickTimer.current = null;
+    setBusy(false);
+    setTyping(null);
+    toast.info("AI generation stopped", {
+      description: "You stopped the AI. Your current progress and files have been preserved.",
+    });
+  }, []);
 
   const splitRef = useRef<HTMLElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
@@ -478,6 +629,63 @@ function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, draft]);
 
+  /* ---------- background generation resilient sync ---------- */
+  useEffect(() => {
+    const handleSync = async () => {
+      if (document.visibilityState === "visible" && activeId && !draft) {
+        try {
+          const { data: proj } = await supabase
+            .from("projects")
+            .select("id, name, files, updated_at")
+            .eq("id", activeId)
+            .single();
+          if (proj?.files) {
+            setFiles((prev) => {
+              const prevStr = JSON.stringify(prev);
+              const nextStr = JSON.stringify(proj.files);
+              if (prevStr !== nextStr) {
+                setPreviewNonce((n) => n + 1);
+                return { ...DEFAULT_FILES, ...(proj.files as Files) };
+              }
+              return prev;
+            });
+            if (proj.name) {
+              setProjects((prev) =>
+                prev.map((p) => (p.id === activeId ? { ...p, name: proj.name, files: proj.files as Files } : p))
+              );
+            }
+          }
+          const { data: msgs } = await supabase
+            .from("chat_messages")
+            .select("id, role, content, mode, snapshot, feedback, attachments")
+            .eq("project_id", activeId)
+            .order("created_at");
+          if (msgs && msgs.length) {
+            setMessages((prev) => {
+              if (msgs.length > prev.length) {
+                setBusy(false);
+                if (stepTimer.current) clearInterval(stepTimer.current);
+                if (tickTimer.current) clearInterval(tickTimer.current);
+                stepTimer.current = null;
+                tickTimer.current = null;
+                return msgs as Msg[];
+              }
+              return prev;
+            });
+          }
+        } catch {
+          // ignore background sync errors
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleSync);
+    window.addEventListener("focus", handleSync);
+    return () => {
+      document.removeEventListener("visibilitychange", handleSync);
+      window.removeEventListener("focus", handleSync);
+    };
+  }, [activeId, draft]);
+
   /* ---------- projects ---------- */
   async function openProject(p: ProjectRow) {
     setDraft(false);
@@ -625,6 +833,7 @@ function Workspace() {
 
     const userMsg: Msg = { id: crypto.randomUUID(), role: "user", content: prompt, mode, attachments: imgs };
     setMessages((m) => [...m, userMsg]);
+    abortControllerRef.current = new AbortController();
     setBusy(true);
     startSteps(mode);
     await persistMsg(projectId, userMsg);
@@ -854,6 +1063,7 @@ function Workspace() {
       const lastPlan = [...history].reverse().find((h) => h.role === "assistant" && h.mode === "plan");
       const result = await generate({
         data: {
+          projectId,
           prompt,
           images: imgs,
           plan: lastPlan?.content,
@@ -893,11 +1103,15 @@ function Workspace() {
       await persistMsg(projectId, asst);
       setPreviewNonce((n) => n + 1);
       setMobileTab("preview");
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === "AbortError" || abortControllerRef.current === null) {
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Generation failed";
       toast.error(msg);
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", content: `⚠️ ${msg}` }]);
     } finally {
+      abortControllerRef.current = null;
       stopSteps();
       setBusy(false);
       inputRef.current?.focus();
@@ -1313,15 +1527,27 @@ function Workspace() {
           </span>
         </div>
 
-        <button
-          type="submit"
-          disabled={busy || !input.trim() || overLimit || isQuotaExhausted}
-          aria-label="Send message"
-          title={isQuotaExhausted ? "Daily giveaway prompt limit reached" : "Send message"}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg gradient-brand text-primary-foreground shadow-lift transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </button>
+        {busy ? (
+          <button
+            type="button"
+            onClick={stopGeneration}
+            aria-label="Force stop AI"
+            title="Force stop AI generation"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lift transition active:scale-95 animate-pulse"
+          >
+            <Square className="h-4 w-4 fill-current" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim() || overLimit || isQuotaExhausted}
+            aria-label="Send message"
+            title={isQuotaExhausted ? "Daily giveaway prompt limit reached" : "Send message"}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg gradient-brand text-primary-foreground shadow-lift transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </form>
   );
@@ -1499,12 +1725,56 @@ function Workspace() {
                     : "Describe an app, drop a screenshot, or speak it. Kenzo writes the code."}
                 </p>
                 <div className="mt-7 text-left">{composer}</div>
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  {["Landing page for a coffee shop", "Interactive todo list with dark mode", "Portfolio with hero and projects grid"].map((s) => (
-                    <button key={s} onClick={() => { setInput(s); inputRef.current?.focus(); }} className="rounded-full glass border border-glass-border px-3.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-surface transition active:scale-[0.98]">
-                      {s}
+                <div className="mt-8 w-full text-left">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" /> Suggested Projects
+                    </span>
+                    <button
+                      type="button"
+                      onClick={shuffleIdeas}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface/80 border border-transparent hover:border-glass-border transition active:scale-95 cursor-pointer"
+                      title="Explore more project ideas"
+                    >
+                      <Shuffle className="h-3 w-3" />
+                      <span>More ideas</span>
                     </button>
-                  ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activeIdeaIndices.map((idx) => {
+                      const item = PROMPT_IDEAS[idx] ?? PROMPT_IDEAS[0];
+                      const IconComp = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setInput(item.prompt);
+                            inputRef.current?.focus();
+                          }}
+                          className="group relative flex items-start gap-3 p-3.5 rounded-2xl glass border border-glass-border/70 hover:border-primary/50 hover:bg-surface/90 text-left transition-all duration-200 hover:shadow-lift active:scale-[0.99] cursor-pointer"
+                        >
+                          <div className={`p-2 rounded-xl bg-gradient-to-br ${item.color} border shrink-0 transition-transform group-hover:scale-110 shadow-xs`}>
+                            <IconComp className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0 pr-4">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition truncate">
+                                {item.title}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-snug">
+                              {item.subtitle}
+                            </p>
+                          </div>
+                          <div className="absolute right-3 top-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary">
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1590,23 +1860,34 @@ function Workspace() {
             {busy && (
               <div className="animate-fade-in-up">
                 <div className="rounded-2xl glass overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setThinkOpen((v) => !v)}
-                    aria-expanded={thinkOpen}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-left transition hover:bg-surface/50"
-                  >
-                    <span className="thinking-dot" />
-                    <span className="thinking-dot" style={{ animationDelay: "150ms" }} />
-                    <span className="thinking-dot" style={{ animationDelay: "300ms" }} />
-                    <span className="ml-1 text-muted-foreground">
-                      {mode === "plan" ? "Kenzo is planning…" : "Kenzo is building…"}
-                    </span>
-                    <span className="ml-auto tabular-nums text-[11px] text-muted-foreground">
+                  <div className="flex w-full items-center gap-2 px-4 py-2.5 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setThinkOpen((v) => !v)}
+                      aria-expanded={thinkOpen}
+                      className="flex items-center gap-2 flex-1 text-left transition hover:opacity-80"
+                    >
+                      <span className="thinking-dot" />
+                      <span className="thinking-dot" style={{ animationDelay: "150ms" }} />
+                      <span className="thinking-dot" style={{ animationDelay: "300ms" }} />
+                      <span className="ml-1 text-muted-foreground font-medium">
+                        {mode === "plan" ? "Kenzo is planning…" : "Kenzo is building…"}
+                      </span>
+                      <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${thinkOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    <span className="tabular-nums text-[11px] text-muted-foreground mr-1">
                       {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
                     </span>
-                    <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${thinkOpen ? "rotate-180" : ""}`} />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={stopGeneration}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-destructive/15 text-destructive hover:bg-destructive hover:text-destructive-foreground text-xs font-medium transition active:scale-95 border border-destructive/30"
+                      title="Force stop AI generation"
+                    >
+                      <Square className="h-3 w-3 fill-current" />
+                      <span>Stop</span>
+                    </button>
+                  </div>
                   {thinkOpen && (
                     <ul className="space-y-1.5 border-t border-glass-border px-4 py-3 text-[12px]">
                       {steps.map((s, i) => {

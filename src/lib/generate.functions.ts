@@ -116,6 +116,7 @@ SCROLL EXPERIENCE
 `;
 
 const Input = z.object({
+  projectId: z.string().uuid().optional(),
   prompt: z.string().min(1).max(6000),
   currentFiles: z
     .object({
@@ -440,10 +441,39 @@ ${CONTRACT}`
             .insert(fresh.map((fact) => ({ user_id: context.userId, fact })));
         }
 
+        const finalFiles = {
+          "index.html": parsed.html || cf["index.html"] || "",
+          "styles.css": parsed.css || cf["styles.css"] || "",
+          "script.js": parsed.js ?? cf["script.js"] ?? "",
+        };
+
+        // Server-side background persistence: ensures the work is saved even if user tab is closed
+        if (data.projectId) {
+          try {
+            const updatePayload: Record<string, unknown> = {
+              files: finalFiles,
+              updated_at: new Date().toISOString(),
+            };
+            if (parsed.name) updatePayload.name = parsed.name;
+            await context.supabase.from("projects").update(updatePayload).eq("id", data.projectId);
+
+            await context.supabase.from("chat_messages").insert({
+              project_id: data.projectId,
+              user_id: context.userId,
+              role: "assistant",
+              content: parsed.summary || "Done.",
+              mode: "build",
+              snapshot: finalFiles,
+            });
+          } catch (dbErr) {
+            console.error("[generateCode] background db save error:", dbErr);
+          }
+        }
+
         return {
-          html: parsed.html || cf["index.html"] || "",
-          css: parsed.css || cf["styles.css"] || "",
-          js: parsed.js || cf["script.js"] || "",
+          html: finalFiles["index.html"],
+          css: finalFiles["styles.css"],
+          js: finalFiles["script.js"],
           summary: parsed.summary,
           name: parsed.name ?? null,
           memory: fresh,
