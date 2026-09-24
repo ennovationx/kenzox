@@ -1947,9 +1947,12 @@ function Workspace() {
         <button
           onClick={() => { startDraft(); setSidebarOpen(false); }}
           title="New project"
-          className={`mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-lg gradient-brand py-2 text-sm font-medium text-primary-foreground shadow-lift hover:opacity-90 transition active:scale-[0.98] ${sidebarCollapsed ? "lg:px-0" : "px-3"}`}
+          className={`mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-lg gradient-brand py-2 text-sm font-medium text-primary-foreground shadow-lift hover:opacity-90 transition active:scale-[0.98] ${
+            sidebarCollapsed ? "lg:mx-auto lg:h-11 lg:w-11 lg:px-0 lg:rounded-xl" : "px-3"
+          }`}
         >
-          <Plus className="h-4 w-4" /> <span className={sidebarCollapsed ? "lg:hidden" : ""}>New project</span>
+          <Plus className={`shrink-0 ${sidebarCollapsed ? "lg:h-5 lg:w-5 h-4 w-4" : "h-4 w-4"}`} />
+          <span className={sidebarCollapsed ? "lg:hidden" : ""}>New project</span>
         </button>
 
         <div className={`px-3 pb-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
@@ -1966,8 +1969,14 @@ function Workspace() {
 
         <div className="flex-1 overflow-auto px-2">
           {draft && (
-            <div className={`flex items-center gap-2 rounded-lg mb-1 px-3 py-2 text-sm bg-primary/10 text-muted-foreground italic ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-              <Sparkles className="h-3.5 w-3.5 text-primary" /> Untitled draft
+            <div
+              className={`flex items-center gap-2 rounded-lg mb-1 px-3 py-2 text-sm bg-primary/10 text-muted-foreground italic ${
+                sidebarCollapsed ? "lg:justify-center lg:px-0 lg:py-2.5 lg:h-11 lg:w-11 lg:mx-auto lg:rounded-xl" : ""
+              }`}
+              title="Untitled draft"
+            >
+              <Sparkles className={`text-primary shrink-0 ${sidebarCollapsed ? "lg:h-5 lg:w-5 h-3.5 w-3.5" : "h-3.5 w-3.5"}`} />
+              <span className={sidebarCollapsed ? "lg:hidden" : ""}>Untitled draft</span>
             </div>
           )}
           {filtered.length === 0 && !draft && (
@@ -1985,18 +1994,18 @@ function Workspace() {
                   isActive
                     ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary shadow-xs"
                     : "hover:bg-surface/80 text-foreground/85 hover:text-foreground"
-                } ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
+                } ${sidebarCollapsed ? "lg:justify-center lg:px-0 lg:py-2.5 lg:h-11 lg:w-11 lg:mx-auto lg:rounded-xl" : ""}`}
                 onClick={() => { openProject(p); setSidebarOpen(false); }}
                 title={p.name}
               >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className={`flex items-center gap-2 ${sidebarCollapsed ? "lg:justify-center lg:gap-0" : "min-w-0 flex-1"}`}>
                   {isGenerating ? (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
+                    <Loader2 className={`shrink-0 text-primary animate-spin ${sidebarCollapsed ? "lg:h-5 lg:w-5 h-3.5 w-3.5" : "h-3.5 w-3.5"}`} />
                   ) : (
                     <FileCode
-                      className={`h-3.5 w-3.5 shrink-0 transition ${
+                      className={`shrink-0 transition ${
                         isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
-                      }`}
+                      } ${sidebarCollapsed ? "lg:h-5 lg:w-5 h-3.5 w-3.5" : "h-3.5 w-3.5"}`}
                     />
                   )}
                   <span className={`truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>
@@ -2034,17 +2043,21 @@ function Workspace() {
             to="/settings"
             title="Settings"
             onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "lg:justify-center lg:px-0 px-3" : "px-3"}`}
+            className={`flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${
+              sidebarCollapsed ? "lg:justify-center lg:px-0 lg:py-2.5 lg:h-10 lg:w-10 lg:mx-auto lg:rounded-xl" : "px-3"
+            }`}
           >
-            <Settings className="h-4 w-4 shrink-0" />
+            <Settings className={`shrink-0 ${sidebarCollapsed ? "lg:h-5 lg:w-5 h-4 w-4" : "h-4 w-4"}`} />
             <span className={sidebarCollapsed ? "lg:hidden" : ""}>Settings</span>
           </Link>
           <button
             onClick={() => { signOut(); setSidebarOpen(false); }}
             title="Log out"
-            className={`w-full flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${sidebarCollapsed ? "lg:justify-center lg:px-0 px-3" : "px-3"}`}
+            className={`w-full flex items-center gap-2 rounded-lg py-2 text-sm hover:bg-surface transition ${
+              sidebarCollapsed ? "lg:justify-center lg:px-0 lg:py-2.5 lg:h-10 lg:w-10 lg:mx-auto lg:rounded-xl" : "px-3"
+            }`}
           >
-            <LogOut className="h-4 w-4 shrink-0" />
+            <LogOut className={`shrink-0 ${sidebarCollapsed ? "lg:h-5 lg:w-5 h-4 w-4" : "h-4 w-4"}`} />
             <span className={sidebarCollapsed ? "lg:hidden" : ""}>Log out</span>
           </button>
         </div>
