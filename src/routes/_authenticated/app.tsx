@@ -17,7 +17,7 @@ import {
   FileCode, Palette, FileText, Loader2, Menu, X, Sparkles, Search, Share2,
   Monitor, Tablet, Smartphone, ChevronDown, FileArchive, Copy, Mic, Square,
   ImagePlus, Terminal, History, ThumbsUp, ThumbsDown, Pencil, Check, Hammer,
-  ClipboardList, Image as ImageIcon, MessageSquare, FolderTree,
+  ClipboardList, Image as ImageIcon, MessageSquare, FolderTree, Camera,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -62,12 +62,39 @@ const CONSOLE_BRIDGE = `<script>(function(){
   window.addEventListener("unhandledrejection",function(e){send("error",["Unhandled promise rejection: "+e.reason])});
 })();<\/script>`;
 
+function cleanHtml(raw: string): string {
+  if (!raw) return "";
+  let h = raw;
+  // Remove any leaked markers and their trailing code if present
+  h = h.replace(/<<<FILE:styles\.css>>>[\s\S]*?(?=(?:<<<FILE:script\.js>>>|<\/html>|$))/gi, "");
+  h = h.replace(/<<<FILE:script\.js>>>[\s\S]*?(?=(?:<<<[A-Za-z0-9_.:\s-]+>>>|<\/html>|$))/gi, "");
+  h = h.replace(/<<<[A-Za-z0-9_.:\s-]+>>>/gi, "");
+  // If </html> is present, strip any leaked CSS or JS after </html>
+  const closeIdx = h.toLowerCase().lastIndexOf("</html>");
+  if (closeIdx !== -1) {
+    const after = h.slice(closeIdx + 7).trim();
+    if (
+      after.startsWith(":root") ||
+      after.startsWith("body") ||
+      after.startsWith("/*") ||
+      after.startsWith("/**") ||
+      after.startsWith("<style") ||
+      after.startsWith("<<")
+    ) {
+      h = h.slice(0, closeIdx + 7);
+    }
+  }
+  return h;
+}
+
 function buildSrcDoc(f: Files): string {
-  let html = f["index.html"] || "";
-  html = html.replace(/<link\s+[^>]*href=["']styles\.css["'][^>]*>/i, `<style>${f["styles.css"] || ""}</style>`);
-  html = html.replace(/<script\s+[^>]*src=["']script\.js["'][^>]*><\/script>/i, `<script>${f["script.js"] || ""}<\/script>`);
-  if (!/<style>/.test(html) && f["styles.css"]) html = html.replace("</head>", `<style>${f["styles.css"]}</style></head>`);
-  if (!/<script>/.test(html) && f["script.js"]) html = html.replace("</body>", `<script>${f["script.js"]}<\/script></body>`);
+  let html = cleanHtml(f["index.html"] || "");
+  const css = (f["styles.css"] || "").replace(/<\/?style[^>]*>/gi, "").replace(/<<<[A-Za-z0-9_.:\s-]+>>>/gi, "");
+  const js = (f["script.js"] || "").replace(/<\/?script[^>]*>/gi, "").replace(/<<<[A-Za-z0-9_.:\s-]+>>>/gi, "");
+  html = html.replace(/<link\s+[^>]*href=["']styles\.css["'][^>]*>/i, `<style>${css}</style>`);
+  html = html.replace(/<script\s+[^>]*src=["']script\.js["'][^>]*><\/script>/i, `<script>${js}</script>`);
+  if (!/<style>/.test(html) && css) html = html.replace("</head>", `<style>${css}</style></head>`);
+  if (!/<script>/.test(html) && js) html = html.replace("</body>", `<script>${js}</script></body>`);
   if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => m + CONSOLE_BRIDGE);
   else html = CONSOLE_BRIDGE + html;
   return html;
@@ -734,6 +761,53 @@ function Workspace() {
     }, 100);
   }
 
+  async function takeScreenshot() {
+    try {
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        toast.info("Please use file upload or paste (Ctrl+V) to attach your screenshot.");
+        fileInputRef.current?.click();
+        return;
+      }
+      toast.info("Select the window or screen tab to capture...");
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: "browser" },
+      });
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      await video.play();
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/png");
+
+      track.stop();
+      stream.getTracks().forEach((t) => t.stop());
+
+      if (dataUrl && dataUrl.length > 100) {
+        setAttachments((prev) => [...prev, dataUrl].slice(0, 4));
+        setMobileTab("chat");
+        if (!input.trim()) {
+          setInput("Please inspect this screenshot of the UI, identify any visual or functional errors, and fix them in the code:");
+        }
+        setTimeout(() => {
+          inputRef.current?.focus();
+          inputRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+        toast.success("Screenshot captured and attached!");
+      }
+    } catch (e: any) {
+      if (e?.name !== "NotAllowedError") {
+        fileInputRef.current?.click();
+      }
+    }
+  }
+
   /* ---------- export ---------- */
   function projectSlug() {
     return (projectName || "kenzo-app").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "kenzo-app";
@@ -858,6 +932,7 @@ function Workspace() {
       <div className="flex items-center gap-1 px-2.5 pb-2.5">
         <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => { void onPickImages(e.target.files); e.currentTarget.value = ""; }} />
         <IconBtn label="Attach images" onClick={() => fileInputRef.current?.click()}><ImagePlus className="h-4 w-4" /></IconBtn>
+        <IconBtn label="Capture screenshot of UI / error" onClick={takeScreenshot}><Camera className="h-4 w-4" /></IconBtn>
         <IconBtn
           label={recording ? "Stop recording" : "Record voice"}
           active={recording}
@@ -920,11 +995,11 @@ function Workspace() {
   return (
     <div className="h-screen w-screen flex overflow-hidden">
       {/* Sidebar */}
-      {sidebarOpen && <div className="fixed inset-0 z-20 bg-background/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 z-[105] bg-background/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
       <aside
-        className={`fixed lg:static z-30 top-0 h-full glass-strong border-r border-glass-border transition-all duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 flex flex-col ${sidebarCollapsed ? "w-16" : "w-72"}`}
+        className={`fixed lg:static z-[110] top-0 h-full glass-strong border-r border-glass-border transition-all duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 flex flex-col ${sidebarCollapsed ? "w-16" : "w-72"}`}
       >
-        <div className="p-4 flex items-center justify-between gap-2">
+        <div className="p-4 flex items-center justify-between gap-2 border-b border-glass-border/60">
           <button
             onClick={() => setSidebarCollapsed((v) => !v)}
             className="hidden lg:inline-flex items-center gap-2 hover:opacity-80 transition"
@@ -932,8 +1007,10 @@ function Workspace() {
           >
             <Logo showWordmark={!sidebarCollapsed} />
           </button>
-          <Link to="/" className="lg:hidden"><Logo /></Link>
-          <button className="lg:hidden p-2" onClick={() => setSidebarOpen(false)} aria-label="Close menu"><X className="h-4 w-4" /></button>
+          <div className="lg:hidden flex items-center gap-2">
+            <Logo showWordmark={false} />
+          </div>
+          <button className="lg:hidden p-2 rounded-lg hover:bg-surface text-muted-foreground hover:text-foreground transition" onClick={() => setSidebarOpen(false)} aria-label="Close menu"><X className="h-4 w-4" /></button>
         </div>
 
         <button
@@ -1013,13 +1090,21 @@ function Workspace() {
 
 
           <div className="p-2">
-            <div className="h-12 flex items-center gap-1 px-2 rounded-xl glass border border-glass-border">
-              <button className="lg:hidden p-2 rounded-lg hover:bg-surface transition" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu className="h-4 w-4" /></button>
+            <div className="h-12 flex items-center gap-2 px-2.5 rounded-xl glass border border-glass-border">
+              <button
+                type="button"
+                className="lg:hidden shrink-0 p-2 rounded-lg bg-surface/60 border border-glass-border hover:bg-surface text-foreground transition active:scale-95 z-10"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open sidebar menu"
+                title="Open sidebar"
+              >
+                <Menu className="h-4 w-4" />
+              </button>
               <input
                 value={projectName}
                 onChange={(e) => renameProject(e.target.value)}
                 aria-label="Project name"
-                className="flex-1 min-w-0 bg-transparent text-sm font-medium outline-none focus:bg-input rounded-lg px-2 py-1 transition"
+                className="flex-1 min-w-0 bg-transparent text-sm font-medium outline-none focus:bg-input rounded-lg px-2 py-1 transition truncate"
               />
               {!draft && collabs.length > 0 && <Avatars people={collabs} onAdd={() => setShareOpen(true)} />}
               {!draft && collabs.length === 0 && (
@@ -1223,8 +1308,17 @@ function Workspace() {
           <div className="p-2">
 
             <div className="h-12 flex items-center justify-between gap-2 px-2 rounded-xl glass border border-glass-border">
-              <div className="flex items-center gap-1.5">
-                <div className="flex lg:hidden items-center bg-input rounded-lg p-0.5 mr-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <button
+                  type="button"
+                  className="lg:hidden shrink-0 p-2 rounded-lg bg-surface/60 border border-glass-border hover:bg-surface text-foreground transition active:scale-95 mr-0.5 z-10"
+                  onClick={() => setSidebarOpen(true)}
+                  aria-label="Open sidebar menu"
+                  title="Open sidebar"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
+                <div className="flex lg:hidden items-center bg-input rounded-lg p-0.5 mr-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => setMobileTab("chat")}
@@ -1257,6 +1351,15 @@ function Workspace() {
               </div>
 
               <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={takeScreenshot}
+                  title="Capture screenshot to fix UI errors"
+                  aria-label="Capture screenshot"
+                  className="p-2 rounded-lg hover:bg-surface transition active:scale-95 text-muted-foreground hover:text-foreground"
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
                 <GithubMenu projectId={activeId} projectName={projectName} />
                 <PublishMenu projectId={activeId} />
                 {rightTab === "preview" && (

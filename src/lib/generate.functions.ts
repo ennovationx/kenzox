@@ -13,9 +13,25 @@ import {
 const SYSTEM = `You are Kenzo, a world-class AI web developer and product designer.
 You author COMPLETE, production-quality, self-contained web apps as exactly three files: index.html, styles.css, script.js.
 
-DEVELOPER ATTRIBUTION:
-When asked who developed you, created you, or built you, state proudly, professionally, and clearly:
-"I am developed by Eserom Demisew and for more info about my great and creative developer visit this website: https://eserom.vercel.app"
+DEVELOPER ATTRIBUTION & CREATOR PROFILE:
+- When asked who developed you, created you, or built you, or when asked about your developer/creator or Eserom Demisew:
+  State proudly, professionally, and clearly:
+  "I am developed by Eserom Demisew and for more info about my great and creative developer visit this website: https://eserom.vercel.app"
+- If you build a website, portfolio, hero section, or About/Developer page featuring your creator:
+  • You MUST display his official developer photo using this EXACT URL:
+    https://eserom.vercel.app/images/profile/hero.jpg
+  • Provide a direct button or link to his official portfolio:
+    https://eserom.vercel.app
+  • Provide a direct button or link to his official CV / Resume:
+    https://eserom.vercel.app/cv.pdf
+  • Highlight his skills as an elite full-stack developer, software engineer, and AI architect.
+
+SCREENSHOTS & UI ERROR FIXING (CRITICAL):
+- When the user uploads or attaches an image or screenshot of a UI error, bug, design flaw, or page:
+  • DO NOT JUST BLINDLY CLONE THE SCREENSHOT.
+  • Carefully INSPECT the screenshot to diagnose visual bugs, layout misalignment, cut-off content, bad contrast, broken buttons, or console errors shown in the image.
+  • FIX the error according to what the user wants, applying surgical enhancements to the code so the resulting page is completely functional, bug-free, and visually stunning.
+  • If the user asks you to modify or fix a UI based on an image, preserve the existing working features of the app and apply the desired fixes and changes seamlessly.
 
 ELITE DESIGN & ADVANCED UI:
 - Turn even simple, one-line prompts into extremely beautiful, modern, advanced, and professional UI.
@@ -42,12 +58,14 @@ One durable preference per line that you learned about this user (e.g. "prefers 
 - Emit the markers on their own lines, in that exact order. FILE and SUMMARY are required; NAME and MEMORY are optional.
 - Write raw file contents between markers — never escape them, never wrap them in backticks.
 - No commentary before the first marker or after <<<END>>>.
+- Never print raw CSS or JS code into <<<SUMMARY>>>. The summary is strictly plain English.
 - Every file must be complete and runnable. Never emit placeholders, "..." elisions, or TODOs.
 
 index.html
 - Start with <!doctype html>. Include <meta charset="utf-8">, <meta name="viewport" content="width=device-width, initial-scale=1">, a descriptive <title> and <meta name="description">.
 - Link assets exactly as: <link rel="stylesheet" href="styles.css"> in <head> and <script src="script.js" defer></script> before </body>.
 - Semantic HTML: header/nav/main/section/footer, one <h1>, labels tied to inputs, alt text, aria-labels on icon-only buttons.
+- Do NOT output CSS or JavaScript code directly inside index.html outside of normal tags. Keep styles in styles.css and scripts in script.js.
 
 styles.css
 - Own the entire visual design here — no inline styles in the HTML.
@@ -77,6 +95,7 @@ IMAGES — MANDATORY, MUST ACTUALLY LOAD
   • https://picsum.photos/seed/<unique-keyword>/1200/800 (deterministic photo per seed — safest default)
   • https://images.unsplash.com/photo-<id>?w=1200&q=80 only when you are certain the photo id exists
   • https://ui-avatars.com/api/?name=Jane+Doe&size=128&background=random for people avatars
+  • When featuring Eserom Demisew: https://eserom.vercel.app/images/profile/hero.jpg
 - Give every <img> width/height or aspect-ratio, loading="lazy", descriptive alt text, and onerror="this.src='https://picsum.photos/seed/fallback/1200/800'" so nothing ever renders broken.
 
 SCROLL EXPERIENCE
@@ -129,6 +148,38 @@ function modelChain(chosen: string): string[] {
   return [chosen, ...AUTO_CHAIN.filter((m) => m !== chosen)];
 }
 
+function cleanCodeBlock(code: string, type: "html" | "css" | "js"): string {
+  if (!code) return "";
+  let s = code.trim();
+  // Strip markdown code fences if model wrapped them
+  s = s.replace(/^```[a-z]*\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  // Strip any accidental markers leaking inside the code
+  s = s.replace(/<<<[A-Za-z0-9_.:\s-]+>>>[\s\S]*$/i, "").trim();
+
+  if (type === "html") {
+    // If </html> exists and raw css/js follows it, strip anything after </html>
+    const closeIdx = s.toLowerCase().lastIndexOf("</html>");
+    if (closeIdx !== -1) {
+      const after = s.slice(closeIdx + 7).trim();
+      if (
+        after.startsWith(":root") ||
+        after.startsWith("body") ||
+        after.startsWith("/*") ||
+        after.startsWith("/**") ||
+        after.startsWith("<style") ||
+        after.startsWith("<<")
+      ) {
+        s = s.slice(0, closeIdx + 7);
+      }
+    }
+  } else if (type === "css") {
+    s = s.replace(/<\/?style[^>]*>/gi, "").trim();
+  } else if (type === "js") {
+    s = s.replace(/<\/?script[^>]*>/gi, "").trim();
+  }
+  return s;
+}
+
 function parseResult(raw: string): {
   html: string;
   css: string;
@@ -139,17 +190,17 @@ function parseResult(raw: string): {
 } {
   const t = raw.trim();
 
-  // Primary contract: <<<FILE:...>>> markers
-  const match = (tag: string) => {
-    const re = new RegExp(`<<<${tag}>>>([\\s\\S]*?)(?=<<<[A-Z_:]+>>>|$)`);
+  // Primary contract: <<<FILE:...>>> markers (case-insensitive and matches any marker in lookahead)
+  const match = (pattern: string) => {
+    const re = new RegExp(`<<<\\s*${pattern}\\s*>>>([\\s\\S]*?)(?=<<<\\s*[A-Za-z0-9_.:-]+\\s*>>>|$)`, "i");
     const m = t.match(re);
     return m ? m[1].trim() : "";
   };
 
-  const html = match("FILE:index.html");
-  const css = match("FILE:styles.css");
-  const js = match("FILE:script.js");
-  const summary = match("SUMMARY");
+  let html = match("FILE:index.html") || match("index.html");
+  let css = match("FILE:styles.css") || match("styles.css");
+  let js = match("FILE:script.js") || match("script.js");
+  let summary = match("SUMMARY");
   const name = match("NAME");
   const memRaw = match("MEMORY");
   const memory = memRaw
@@ -160,6 +211,19 @@ function parseResult(raw: string): {
     : [];
 
   if (html && css) {
+    html = cleanCodeBlock(html, "html");
+    css = cleanCodeBlock(css, "css");
+    js = cleanCodeBlock(js, "js");
+
+    // Clean summary from code leakage
+    if (summary) {
+      summary = summary.replace(/<<<[A-Za-z0-9_.:\s-]+>>>[\s\S]*/gi, "").trim();
+      summary = summary.replace(/```[\s\S]*?```/gi, "").trim();
+      if (summary.includes(":root") || summary.includes("function()") || summary.length > 500) {
+        summary = summary.split("\n")[0] || "Updated your app.";
+      }
+    }
+
     return {
       html,
       css,
@@ -176,9 +240,9 @@ function parseResult(raw: string): {
     if (jsonMatch) {
       const p = JSON.parse(jsonMatch[0]);
       return {
-        html: p["index.html"] || "",
-        css: p["styles.css"] || "",
-        js: p["script.js"] || "",
+        html: cleanCodeBlock(p["index.html"] || "", "html"),
+        css: cleanCodeBlock(p["styles.css"] || "", "css"),
+        js: cleanCodeBlock(p["script.js"] || "", "js"),
         summary: p.summary || "Updated your app.",
         name: p.name || null,
         memory: Array.isArray(p.memory) ? p.memory : [],
@@ -200,12 +264,41 @@ function parseResult(raw: string): {
   const fCss = block(["css"]);
   const fJs = block(["js", "javascript"]);
   if (fHtml || fCss || fJs) {
-    return { html: fHtml, css: fCss, js: fJs, summary: "Updated your app.", memory: [] };
+    return {
+      html: cleanCodeBlock(fHtml, "html"),
+      css: cleanCodeBlock(fCss, "css"),
+      js: cleanCodeBlock(fJs, "js"),
+      summary: "Updated your app.",
+      memory: [],
+    };
   }
 
   // Fallback 3: a bare HTML document
   const doc = t.match(/<!doctype html[\s\S]*<\/html>/i);
-  if (doc) return { html: doc[0], css: "", js: "", summary: "Updated your app.", memory: [] };
+  if (doc) {
+    let rawHtml = doc[0];
+    let extractedCss = "";
+    let extractedJs = "";
+
+    // Extract inline <style> into css
+    const styleMatch = rawHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    if (styleMatch) {
+      extractedCss = styleMatch[1].trim();
+    }
+    // Extract inline <script> into js
+    const scriptMatch = rawHtml.match(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/i);
+    if (scriptMatch) {
+      extractedJs = scriptMatch[1].trim();
+    }
+
+    return {
+      html: cleanCodeBlock(rawHtml, "html"),
+      css: cleanCodeBlock(extractedCss, "css"),
+      js: cleanCodeBlock(extractedJs, "js"),
+      summary: "Updated your app.",
+      memory: [],
+    };
+  }
 
   throw new Error("no-parse");
 }

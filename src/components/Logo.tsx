@@ -12,7 +12,7 @@ export function Logo({ size = 32, showWordmark = true }: { size?: number; showWo
         className="rounded-lg"
       />
       {showWordmark && (
-        <span className="font-semibold tracking-tight text-foreground text-lg">Kenzo</span>
+        <span className="hidden sm:inline font-semibold tracking-tight text-foreground text-lg">Kenzo</span>
       )}
     </span>
   );
