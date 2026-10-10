@@ -31,9 +31,19 @@ One durable preference per line that you learned about this user (e.g. "prefers 
 - Every file must be complete and runnable. Never emit placeholders, "..." elisions, or TODOs.
 
 ═══════════════════════════════════════
+0. SIMPLE PROMPTS GET THE FULL PREMIUM TREATMENT
+═══════════════════════════════════════
+- The user may write only a few words ("build me a coffee website", "make a gym site", "todo app"). NEVER treat a short prompt as a small job and NEVER ask questions. Treat it as a creative brief where every missing decision is yours to make, and deliver the most advanced, beautiful, complete and fully working version of that idea.
+- Silently expand the short prompt into a full brief (brand name, tagline, audience, location, design direction, palette, fonts, 8 to 10 sections, signature interaction, image keywords, real copy and prices), then build ALL of it. The result must feel like a paid, finished agency project, never a starter template.
+- Minimum for any website request: a hero with a strong visual and two CTAs, 8 or more rich sections, a working interactive centrepiece suited to the subject (menu with order drawer, booking form, product filter and cart, pricing toggle, gallery lightbox, calculator), dark/light theme toggle, mobile drawer menu, scroll-progress bar, scroll reveals, animated counters or other motion, toast feedback and a full footer.
+- Minimum for an app, game or tool: complete and correct logic, polished UI, persistence, keyboard support, empty and error states, reset, and celebratory feedback.
+- Example expansion (illustration only — never reuse these exact names, palette or layout): "coffee website" becomes a specialty roaster such as "Ember and Bean Roasters" with a dark editorial look, a hero with a large cup photo, signature drinks, a filterable menu with a working order drawer, brewing-method tabs, a bean shop with add to cart, an origin story with counters, a lightbox gallery, a testimonials carousel, a subscription or reservation form, an hours-and-location card, a newsletter and a footer. Invent a different brand, palette, fonts and layout every time.
+- Speed: keep your private planning short (about 300 words), then start writing the files at once. Output nothing except the marker format.
+
+═══════════════════════════════════════
 1. THINK FIRST (silently — never print this)
 ═══════════════════════════════════════
-Before writing a single line, decide:
+Before writing a single line, decide (briefly, then start writing):
 1. SUBJECT: what this is, who it is for, and the one thing the visitor must be able to do (buy, book, sign up, play, manage). If no brand name is given, invent a believable one.
 2. LOOK: choose ONE design direction (section 3), a palette of 6 named hex values (background, surface, text, muted text, primary accent, secondary accent) plus dark-mode equivalents, and one or two Google Fonts chosen for this subject.
 3. STRUCTURE: the sections or screens that a real professional site in this field needs (section 4), and ONE memorable moment — a hero treatment or an interactive centrepiece — where you spend your boldness. Keep everything around it quiet and disciplined. Cut any decoration that does not serve the brief.
@@ -131,6 +141,104 @@ script.js
 - Every id, class and data-attribute used in script.js must exist in index.html with the same spelling, and every class toggled in JS must be styled in styles.css.
 - Never throw on first load. Never leave unused variables, duplicate declarations, or console.log calls.
 
+KNOWN-GOOD SCRIPT CORE — start script.js from these tested patterns (plain ES5-safe syntax, no template literals), keep them as written, delete any helper the site does not use, and add the site-specific features below them. Rename an id or class only if you rename it in the HTML and CSS too.
+(function () {
+  'use strict';
+  document.documentElement.classList.add('js');
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var root = document.documentElement;
+
+  /* Safe storage: works even when the sandbox blocks localStorage */
+  var mem = {};
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return k in mem ? mem[k] : d; } },
+    set: function (k, v) { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  /* Theme toggle with persistence */
+  var prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  root.setAttribute('data-theme', store.get('theme', null) || (prefersDark ? 'dark' : 'light'));
+  var themeBtn = $('#theme-toggle');
+  if (themeBtn) themeBtn.addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    store.set('theme', next);
+  });
+
+  /* Toasts (needs <div id="toasts" aria-live="polite"></div>) */
+  function toast(msg) {
+    var box = $('#toasts'); if (!box) return;
+    var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('open'); });
+    setTimeout(function () { t.classList.remove('open'); setTimeout(function () { t.remove(); }, 400); }, 2600);
+  }
+
+  /* Scroll-reveal: mark elements with data-reveal */
+  var io = ('IntersectionObserver' in window) ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('is-visible'); io.unobserve(en.target); } });
+  }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' }) : null;
+  $$('[data-reveal]').forEach(function (el, i) {
+    el.style.setProperty('--i', String(i % 6));
+    if (io) io.observe(el); else el.classList.add('is-visible');
+  });
+
+  /* Scroll progress bar + condensing header (needs .scroll-progress and .site-header) */
+  var bar = $('.scroll-progress'), header = $('.site-header'), ticking = false;
+  function onScroll() {
+    var max = root.scrollHeight - root.clientHeight;
+    var p = max > 0 ? root.scrollTop / max : 0;
+    if (bar) bar.style.transform = 'scaleX(' + p + ')';
+    if (header) header.classList.toggle('is-condensed', root.scrollTop > 40);
+    ticking = false;
+  }
+  window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  onScroll();
+
+  /* In-page anchors: smooth scroll without navigating the sandboxed frame */
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if (!a) return;
+    var id = a.getAttribute('href');
+    if (!id || id.length < 2) return;
+    var target = document.getElementById(id.slice(1));
+    if (!target) return;
+    e.preventDefault();
+    target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  });
+
+  /* Modals, drawers and the mobile menu: give each panel class="layer" and hidden */
+  function openLayer(el) {
+    if (!el) return;
+    el.hidden = false;
+    requestAnimationFrame(function () { el.classList.add('open'); });
+    document.body.classList.add('no-scroll');
+  }
+  function closeLayer(el) {
+    if (!el) return;
+    el.classList.remove('open');
+    document.body.classList.remove('no-scroll');
+    setTimeout(function () { el.hidden = true; }, reduce ? 0 : 350);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') $$('.layer.open').forEach(closeLayer);
+  });
+
+  /* ...site-specific features go below: render lists, filters, cart, forms, carousel, counters, etc. */
+})();
+
+COMMON BUGS — prevent every one of these:
+- Add [hidden] { display: none !important; } so toggled layers truly disappear, and .no-scroll { overflow: hidden; } for the scroll lock.
+- Never use width: 100vw (it causes horizontal scroll); use 100%. Use overflow-x: clip on html and body, never overflow-x: hidden (it breaks position: sticky).
+- Give every anchor target scroll-margin-top equal to the header height so the sticky header never covers headings.
+- Use a z-index scale: header 50, drawer 80, modal 90, toast 100, scroll-progress 110.
+- Responsive grids use repeat(auto-fit, minmax(min(100%, 260px), 1fr)) so they can never overflow on small screens.
+- Image wrappers have aspect-ratio and overflow: hidden, so nothing shifts or spills while loading.
+- Carts and lists store only ids and quantities; recompute names, prices and totals from the data array, and round money with toFixed(2) only when displaying.
+- Forms validate on submit and on blur, show a text error beside the field, focus the first invalid field, set min on date inputs to today from JS, and show a clear success state.
+- Do not re-bind listeners on re-render; use event delegation on the list container.
+
 ═══════════════════════════════════════
 7. MOTION — Framer Motion, rebuilt in vanilla CSS and JS
 ═══════════════════════════════════════
@@ -215,6 +323,7 @@ const Input = z.object({
   verbosity: z.string().optional(),
   style: z.string().optional(),
   model: z.string().optional(),
+  runtimeErrors: z.string().max(4000).optional(),
 });
 
 const ALLOWED_MODELS = new Set([
@@ -335,6 +444,164 @@ function parseResult(text: string): Result {
   throw new Error("no-parse");
 }
 
+type Files = { html: string; css: string; js: string };
+
+/**
+ * Naive bracket balance that skips strings, comments and regex literals.
+ * A result > 0 means something was left open, which is the signature of a cut-off file.
+ */
+function bracketDepth(code: string, lang: "js" | "css"): number {
+  let depth = 0;
+  let prev = "";
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    const nx = code[i + 1];
+    if (c === "/" && nx === "*") {
+      const end = code.indexOf("*/", i + 2);
+      if (end === -1) return depth + 1; // unterminated comment => cut off
+      i = end + 1;
+      continue;
+    }
+    if (lang === "js" && c === "/" && nx === "/") {
+      const end = code.indexOf("\n", i);
+      if (end === -1) break;
+      i = end;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      while (j < code.length && code[j] !== c) {
+        if (code[j] === "\\") j++;
+        else if (c !== "`" && code[j] === "\n") break;
+        j++;
+      }
+      i = j;
+      prev = c;
+      continue;
+    }
+    if (lang === "js" && c === "/" && "(,=:[!&|?{};".includes(prev || ";")) {
+      // regex literal
+      let j = i + 1;
+      let inClass = false;
+      while (j < code.length && code[j] !== "\n") {
+        if (code[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (code[j] === "[") inClass = true;
+        else if (code[j] === "]") inClass = false;
+        else if (code[j] === "/" && !inClass) break;
+        j++;
+      }
+      i = j;
+      prev = "/";
+      continue;
+    }
+    if (c === "{" || c === "(" || c === "[") depth++;
+    else if (c === "}" || c === ")" || c === "]") depth--;
+    if (!/\s/.test(c)) prev = c;
+  }
+  return depth;
+}
+
+/** Compile-only syntax check (never executes the code). checked=false where the runtime forbids code generation. */
+function checkJsSyntax(js: string): { checked: boolean; error: string | null } {
+  if (!js.trim()) return { checked: true, error: null };
+  try {
+    // eslint-disable-next-line no-new-func
+    new Function(js);
+    return { checked: true, error: null };
+  } catch (e) {
+    if (e instanceof SyntaxError) return { checked: true, error: e.message };
+    return { checked: false, error: null };
+  }
+}
+
+/** Risk-free fixes applied to every build with no extra AI call. */
+function patchFiles(f: Files): Files {
+  let { html, css } = f;
+  const js = f.js;
+
+  if (html) {
+    // Every <img> gets a one-shot fallback so nothing ever renders broken.
+    let n = 0;
+    html = html.replace(/<img\b([^>]*)>/gi, (tag: string, attrs: string) => {
+      if (/\sonerror\s*=/i.test(" " + attrs)) return tag;
+      n++;
+      const selfClose = /\/\s*$/.test(attrs);
+      const base = attrs.replace(/\s*\/\s*$/, "");
+      return `<img${base} onerror="this.onerror=null;this.src='https://picsum.photos/seed/fallback-${n}/1200/800'"${selfClose ? " /" : ""}>`;
+    });
+    // Asset links, favicon (prevents a 404 in the console).
+    if (/<\/head>/i.test(html)) {
+      if (!/href\s*=\s*["']styles\.css["']/i.test(html))
+        html = html.replace(/<\/head>/i, `<link rel="stylesheet" href="styles.css">\n</head>`);
+      if (!/rel\s*=\s*["'](?:shortcut )?icon["']/i.test(html))
+        html = html.replace(/<\/head>/i, `<link rel="icon" href="data:,">\n</head>`);
+    }
+    if (/<\/body>/i.test(html) && !/src\s*=\s*["']script\.js["']/i.test(html))
+      html = html.replace(/<\/body>/i, `<script src="script.js" defer></script>\n</body>`);
+  }
+
+  if (css && bracketDepth(css, "css") === 0) {
+    // Toggled layers must truly disappear and scroll-lock must work.
+    if (!/\[hidden\]/.test(css)) css += `\n[hidden]{display:none !important}\n`;
+    if (!/\.no-scroll/.test(css)) css += `\n.no-scroll{overflow:hidden}\n`;
+  }
+
+  return { html, css, js };
+}
+
+/** Static self-check. Returns serious problems only; an empty list means the build looks sound. */
+function findProblems(f: Files): string[] {
+  const out: string[] = [];
+  const { html, css, js } = f;
+
+  if (!html.trim()) out.push("index.html is empty.");
+  if (!css.trim()) out.push("styles.css is empty.");
+  if (!js.trim()) out.push("script.js is empty.");
+
+  if (html.trim() && !/<\/html>\s*$/i.test(html.trim()))
+    out.push("index.html is cut off: it must end with </body></html>.");
+
+  const syn = checkJsSyntax(js);
+  if (syn.error) out.push(`script.js has a syntax error: ${syn.error}.`);
+  else if (!syn.checked && bracketDepth(js, "js") > 0)
+    out.push("script.js is cut off or has unclosed brackets.");
+  if (bracketDepth(css, "css") > 0) out.push("styles.css is cut off or has unclosed braces.");
+
+  // Every id the script looks up must exist in the HTML (or be created by the script).
+  const ids = new Set<string>();
+  for (const m of html.matchAll(/\sid\s*=\s*["']([^"']+)["']/gi)) ids.add(m[1]);
+  for (const m of js.matchAll(/\bid\s*=\s*["']([\w-]+)["']/g)) ids.add(m[1]);
+  for (const m of js.matchAll(/\.id\s*=\s*["']([\w-]+)["']/g)) ids.add(m[1]);
+  for (const m of js.matchAll(/setAttribute\(\s*["']id["']\s*,\s*["']([\w-]+)["']/g)) ids.add(m[1]);
+
+  const used = new Set<string>();
+  for (const m of js.matchAll(/getElementById\(\s*["']([\w-]+)["']\s*\)/g)) used.add(m[1]);
+  for (const m of js.matchAll(/(?:querySelector|\$\$?)\(\s*["']#([\w-]+)["']/g)) used.add(m[1]);
+  const missing = [...used].filter((id) => !ids.has(id));
+  if (missing.length)
+    out.push(`script.js looks up ids that do not exist in index.html: ${missing.slice(0, 8).join(", ")}.`);
+
+  // Anchor links must land on a real section.
+  const dead = new Set<string>();
+  for (const m of html.matchAll(/href\s*=\s*["']#([\w-]+)["']/gi)) if (!ids.has(m[1])) dead.add(m[1]);
+  if (dead.size)
+    out.push(
+      `index.html links to sections that do not exist: ${[...dead].slice(0, 8).map((d) => "#" + d).join(", ")}.`,
+    );
+
+  // APIs that are blocked or unsafe inside the sandboxed preview.
+  if (/(^|[^.\w$])(alert|confirm|prompt)\s*\(/.test(js))
+    out.push(
+      "script.js uses alert/confirm/prompt, which are blocked in the sandboxed preview. Use the toast and an in-page modal instead.",
+    );
+  if (/(^|[^.\w$])eval\s*\(|document\.write\s*\(/.test(js)) out.push("script.js uses eval or document.write, which must not be used.");
+
+  return out;
+}
+
 export const generateCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => Input.parse(data))
@@ -370,6 +637,10 @@ export const generateCode = createServerFn({ method: "POST" })
       ? `\n\nThe user attached ${data.images!.length} reference image(s). Study them closely and match the layout, colours, spacing and mood as faithfully as you can.`
       : "";
 
+    const errBlock = data.runtimeErrors
+      ? `\n\nThe live preview reported these runtime errors. Find the root cause and fix them completely (check every related id, selector, variable and function):\n${data.runtimeErrors}\n`
+      : "";
+
     const userText = hasCurrent
       ? `Modify the app below to satisfy the user's request. Preserve working parts; keep the same architecture unless a change is required. Always return ALL THREE files in full.
 
@@ -384,10 +655,10 @@ ${cf["script.js"] ?? ""}
 
 User request:
 ${data.prompt}
-${planBlock}${imageBlock}
+${planBlock}${imageBlock}${errBlock}
 
 ${CONTRACT}`
-      : `Build a fresh, complete app for this request.\n\n${data.prompt}\n${planBlock}${imageBlock}\n\n${CONTRACT}`;
+      : `Build a fresh, complete app for this request.\n\n${data.prompt}\n${planBlock}${imageBlock}${errBlock}\n\n${CONTRACT}`;
 
     const parts: AiPart[] = [{ type: "text", text: userText }];
     for (const img of data.images ?? []) parts.push({ type: "image", image: img });
@@ -395,20 +666,20 @@ ${CONTRACT}`
     const memBlock = memory.length ? `\n\nRemembered about this user:\n- ${memory.join("\n- ")}` : "";
     const sys = `${SYSTEM}\n\nUser preferences: personality=${personality}, verbosity=${verbosity}, style=${style}.${memBlock}`;
 
-    try {
-      // Auto mode: walk the model chain, and inside it every configured key.
-      // A model that is unavailable, overloaded or rejects the request simply
-      // hands over to the next one, so a build never dies on one bad choice.
-      let text = "";
+    // Auto mode: walk the model chain, and inside it every configured key.
+    // A model that is unavailable, overloaded or rejects the request simply
+    // hands over to the next one, so a build never dies on one bad choice.
+    const callModels = async (system: string, userParts: AiPart[]) => {
+      let out = "";
       let lastErr: unknown = null;
       outer: for (const modelId of chain) {
         for (const k of keys) {
           try {
-            text = await generateWithKey({
+            out = await generateWithKey({
               apiKey: k.api_key,
               modelId,
-              system: sys,
-              parts,
+              system,
+              parts: userParts,
               maxOutputTokens: 32000,
             });
             lastErr = null;
@@ -423,8 +694,29 @@ ${CONTRACT}`
         }
       }
       if (lastErr) throw lastErr;
+      return out;
+    };
 
+    // Prompt for the automatic repair pass.
+    const repairText = (f: Files, problems: string[]) =>
+      `Automatic checks found problems in the app below. Fix EVERY problem. Keep the design, content, images and every working feature exactly as they are. If space is tight, make the code more compact rather than dropping anything. Always return ALL THREE files in full.
 
+Problems found:
+- ${problems.join("\n- ")}
+
+Current index.html:
+${f.html}
+
+Current styles.css:
+${f.css}
+
+Current script.js:
+${f.js}
+
+${CONTRACT}`;
+
+    try {
+      const text = await callModels(sys, parts);
 
       if (!text || !text.trim()) throw new Error("Empty response from AI");
       try {
@@ -437,14 +729,46 @@ ${CONTRACT}`
             .insert(fresh.map((fact) => ({ user_id: context.userId, fact })));
         }
 
-        // Keep unchanged files instead of blanking them out.
-        return {
+        // Keep unchanged files instead of blanking them out, then apply the safe automatic patches.
+        let files: Files = patchFiles({
           html: parsed.html || cf["index.html"] || "",
           css: parsed.css || cf["styles.css"] || "",
           js: parsed.js || cf["script.js"] || "",
+        });
+
+        // Self-check; if serious problems remain, run ONE automatic repair pass and keep it only if it is better.
+        let problems = findProblems(files);
+        let autoFixed = false;
+        if (problems.length) {
+          console.warn("[generateCode] auto-fix needed:", problems);
+          try {
+            const fixedText = await callModels(sys, [{ type: "text", text: repairText(files, problems) }]);
+            const fixed = parseResult(fixedText);
+            const candidate = patchFiles({
+              html: fixed.html || files.html,
+              css: fixed.css || files.css,
+              js: fixed.js || files.js,
+            });
+            const remaining = findProblems(candidate);
+            if (remaining.length < problems.length) {
+              files = candidate;
+              problems = remaining;
+              autoFixed = true;
+            }
+          } catch (fixErr) {
+            console.error("[generateCode] auto-fix skipped:", fixErr);
+          }
+        }
+
+        return {
+          html: files.html,
+          css: files.css,
+          js: files.js,
           summary: parsed.summary,
           name: parsed.name ?? null,
           memory: fresh,
+          autoFixed,
+          warnings: problems,
         };
       } catch (parseErr) {
         console.error("[generateCode] parse failed:", parseErr, "raw:", text.slice(0, 800));
